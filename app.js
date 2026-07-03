@@ -1506,8 +1506,29 @@ document.addEventListener("click", (event) => {
     runAITask(target.dataset.aiTask, target.dataset.aiQuestion || "");
     return;
   }
+  if (!isCommandButton(target)) return;
   handleAction(target);
 });
+
+function isCommandButton(target) {
+  const commandKeys = [
+    "action",
+    "editLog",
+    "deleteLog",
+    "repeatLog",
+    "importFood",
+    "editFood",
+    "deleteFood",
+    "editSauce",
+    "deleteSauce",
+    "editMeal",
+    "deleteMeal",
+    "removeComponent",
+    "deleteProgress",
+    "deleteCardio",
+  ];
+  return commandKeys.some((key) => target.dataset[key] !== undefined);
+}
 
 function handleAction(target) {
   const action = target.dataset.action;
