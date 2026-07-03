@@ -75,9 +75,18 @@ function saveState() {
     return true;
   } catch (error) {
     console.warn("Unable to save local app data", error);
+    try {
+      state = stripStoredPhotos(state);
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      storageWarningShown = false;
+      return true;
+    } catch (retryError) {
+      console.warn("Unable to save compact local app data", retryError);
+    }
     if (!storageWarningShown) {
       storageWarningShown = true;
-      alert("تعذر حفظ البيانات محلياً. غالباً التخزين ممتلئ بسبب الصور. جرّب حذف صور قديمة أو استخدم صوراً أقل.");
+      alert("تعذر حفظ البيانات محلياً. سأحاول إبقاء الإعدادات محفوظة بشكل مستقل.");
     }
     return false;
   }
@@ -108,8 +117,22 @@ function saveSettingsOnly(settings) {
     return true;
   } catch (error) {
     console.warn("Unable to save settings separately", error);
-    return false;
+    try {
+      compactLocalStorage();
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalizeSettings(settings)));
+      return true;
+    } catch (retryError) {
+      console.warn("Unable to save settings after compaction", retryError);
+      return false;
+    }
   }
+}
+
+function compactLocalStorage() {
+  const compactState = stripStoredPhotos(state || structuredClone(defaultState));
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(compactState));
+  state = compactState;
 }
 
 function normalizeSettings(settings = {}) {
@@ -1396,8 +1419,9 @@ function saveSettings(event) {
     nextSettings[key] = finiteSetting(data[key], nextSettings[key]);
   });
   state.settings = normalizeSettings(nextSettings);
+  compactLocalStorage();
   const settingsSaved = saveSettingsOnly(state.settings);
-  saveState();
+  const stateSaved = saveState();
   alert(settingsSaved ? "تم حفظ الإعدادات." : "لم يتم حفظ الإعدادات. إذا كنت تستخدم Safari، اضغط Reduce Protections أو افتح الرابط في Safari مباشرة.");
   render();
 }
@@ -1599,6 +1623,7 @@ function handleAction(target) {
   if (action === "seed-demo") seedDemo();
   if (action === "reset-data" && confirm("تأكيد تصفير كل بيانات التطبيق؟")) {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(SETTINGS_KEY);
     state = structuredClone(defaultState);
   }
   render();

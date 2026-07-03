@@ -1,4 +1,4 @@
-const CACHE_NAME = "fat-loss-coach-v5";
+const CACHE_NAME = "fat-loss-coach-v6";
 const APP_SHELL = [
   "./",
   "./index.html",
