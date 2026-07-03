@@ -34,6 +34,8 @@ const defaultState = {
   savedDays: [],
 };
 
+const stateCollections = ["foods", "sauces", "meals", "foodLogs", "cardioLogs", "progressLogs", "bodyPhotos", "savedDays"];
+
 let state = loadState();
 let activeDate = todayISO();
 let editing = {};
@@ -41,6 +43,7 @@ let activeProgressTab = "metrics";
 let usdaSearchTimer = null;
 let usdaResults = [];
 let aiLastResponse = "";
+let storageWarningShown = false;
 
 const views = [...document.querySelectorAll(".view")];
 const activeDateInput = document.querySelector("#activeDate");
@@ -51,14 +54,42 @@ function loadState() {
   if (!raw) return structuredClone(defaultState);
   try {
     const parsed = JSON.parse(raw);
-    return { ...structuredClone(defaultState), ...parsed, settings: { ...defaultState.settings, ...(parsed.settings || {}) } };
+    const base = structuredClone(defaultState);
+    const merged = { ...base, ...parsed, settings: normalizeSettings(parsed.settings) };
+    stateCollections.forEach((key) => {
+      if (!Array.isArray(merged[key])) merged[key] = base[key];
+    });
+    return merged;
   } catch {
     return structuredClone(defaultState);
   }
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    storageWarningShown = false;
+    return true;
+  } catch (error) {
+    console.warn("Unable to save local app data", error);
+    if (!storageWarningShown) {
+      storageWarningShown = true;
+      alert("تعذر حفظ البيانات محلياً. غالباً التخزين ممتلئ بسبب الصور. جرّب حذف صور قديمة أو استخدم صوراً أقل.");
+    }
+    return false;
+  }
+}
+
+function normalizeSettings(settings = {}) {
+  return Object.fromEntries(
+    Object.entries(defaultState.settings).map(([key, defaultValue]) => [key, finiteSetting(settings[key], defaultValue)])
+  );
+}
+
+function finiteSetting(value, fallback) {
+  if (value === undefined || value === null || String(value).trim() === "") return fallback;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
 function formatNumber(value, digits = 0) {
@@ -1221,10 +1252,39 @@ async function saveProgress(event) {
   render();
 }
 
-function fileToDataUrl(file) {
+async function fileToDataUrl(file) {
+  if (file?.type?.startsWith("image/")) return compressImageFile(file);
+  return readFileAsDataUrl(file);
+}
+
+function readFileAsDataUrl(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
+}
+
+function compressImageFile(file, maxSize = 1280, quality = 0.78) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      image.onerror = () => resolve(reader.result);
+      image.src = reader.result;
+    };
+    reader.onerror = () => resolve("");
     reader.readAsDataURL(file);
   });
 }
@@ -1422,9 +1482,12 @@ function settingInput(name, label, value) {
 function saveSettings(event) {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(event.currentTarget));
-  Object.keys(state.settings).forEach((key) => {
-    state.settings[key] = Number(data[key]);
+  const nextSettings = { ...state.settings };
+  Object.keys(defaultState.settings).forEach((key) => {
+    if (!Object.hasOwn(data, key)) return;
+    nextSettings[key] = finiteSetting(data[key], nextSettings[key]);
   });
+  state.settings = normalizeSettings(nextSettings);
   render();
 }
 
