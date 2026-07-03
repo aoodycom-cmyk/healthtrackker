@@ -51,17 +51,19 @@ activeDateInput.value = activeDate;
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   const savedSettings = loadSettingsOnly();
-  if (!raw) return { ...structuredClone(defaultState), settings: savedSettings };
+  if (!raw) return { ...structuredClone(defaultState), settings: savedSettings || normalizeSettings() };
   try {
     const parsed = JSON.parse(raw);
     const base = structuredClone(defaultState);
-    const merged = { ...base, ...parsed, settings: normalizeSettings({ ...(parsed.settings || {}), ...savedSettings }) };
+    const mergedSettings = normalizeSettings(savedSettings ? { ...(parsed.settings || {}), ...savedSettings } : parsed.settings);
+    const merged = { ...base, ...parsed, settings: mergedSettings };
     stateCollections.forEach((key) => {
       if (!Array.isArray(merged[key])) merged[key] = base[key];
     });
+    if (!savedSettings) saveSettingsOnly(mergedSettings);
     return stripStoredPhotos(merged);
   } catch {
-    return structuredClone(defaultState);
+    return { ...structuredClone(defaultState), settings: savedSettings || normalizeSettings() };
   }
 }
 
@@ -94,9 +96,9 @@ function stripStoredPhotos(nextState) {
 function loadSettingsOnly() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    return raw ? normalizeSettings(JSON.parse(raw)) : normalizeSettings();
+    return raw ? normalizeSettings(JSON.parse(raw)) : null;
   } catch {
-    return normalizeSettings();
+    return null;
   }
 }
 
