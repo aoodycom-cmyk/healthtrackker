@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#070714" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Fat Loss Coach" />
+    <title>متابعة إنقاص الدهون</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">برنامجك اليومي</p>
+          <h1>متابعة إنقاص الدهون</h1>
+        </div>
+        <input id="activeDate" class="date-picker" type="date" />
+      </header>
+
+      <main>
+        <section id="dashboard" class="view active"></section>
+        <section id="food-log" class="view"></section>
+        <section id="add" class="view"></section>
+        <section id="progress" class="view"></section>
+        <section id="settings" class="view"></section>
+        <section id="ai-coach" class="view"></section>
+      </main>
+
+      <nav class="bottom-nav" aria-label="التنقل الرئيسي">
+        <button class="nav-item active" data-view="dashboard" title="الرئيسية">
+          <span data-icon="home"></span><small>الرئيسية</small>
+        </button>
+        <button class="nav-item" data-view="food-log" title="الأكل">
+          <span data-icon="utensils"></span><small>اليوم</small>
+        </button>
+        <button class="nav-item add-tab" data-action="open-quick-add" title="إضافة">
+          <span data-icon="plus"></span><small>إضافة</small>
+        </button>
+        <button class="nav-item" data-view="progress" title="التقدم">
+          <span data-icon="trending"></span><small>التقدم</small>
+        </button>
+        <button class="nav-item" data-view="settings" title="الإعدادات">
+          <span data-icon="more"></span><small>المزيد</small>
+        </button>
+      </nav>
+    </div>
+
+    <div class="sheet-backdrop" id="quickAddBackdrop" aria-hidden="true"></div>
+    <aside class="quick-sheet" id="quickAddSheet" aria-label="إضافة سريعة">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <div>
+          <p class="eyebrow">Quick Add</p>
+          <h2>أضف وجبتك بسرعة</h2>
+        </div>
+        <button class="btn icon secondary" type="button" data-action="close-quick-add" title="إغلاق">×</button>
+      </div>
+      <form id="quickFoodForm" class="sheet-form">
+        <div class="field">
+          <label>الوجبة</label>
+          <select class="select" name="source" id="quickSource"></select>
+        </div>
+        <div class="two-cols">
+          <div class="field">
+            <label>الجرامات</label>
+            <input class="input quick-grams" name="grams" type="number" min="1" step="1" value="250" />
+          </div>
+          <div class="field">
+            <label>الصوص</label>
+            <select class="select" name="sauceId" id="quickSauce"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label>صوص g</label>
+          <input class="input" name="sauceGrams" type="number" min="0" step="1" value="0" />
+        </div>
+        <div class="quick-preview" id="quickPreview"></div>
+        <button class="btn sheet-primary" type="submit">تم، أضف الوجبة</button>
+      </form>
+      <div class="sheet-shortcuts">
+        <button class="btn secondary" type="button" data-action="quick-food-search">USDA / Barcode</button>
+        <button class="btn secondary" type="button" data-action="quick-cardio">كارديو</button>
+        <button class="btn secondary" type="button" data-action="quick-weight">وزن</button>
+      </div>
+    </aside>
+
+    <template id="cardTemplate">
+      <article class="metric-card">
+        <span class="metric-label"></span>
+        <strong class="metric-value"></strong>
+        <small class="metric-note"></small>
+      </article>
+    </template>
+
+    <script src="./services/usda.service.js"></script>
+    <script src="./services/barcode.service.js"></script>
+    <script src="./services/openai.service.js"></script>
+    <script src="./app.js"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("./sw.js").catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>

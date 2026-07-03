@@ -1,0 +1,19 @@
+{
+  "name": "Fat Loss Coach",
+  "short_name": "FatLoss",
+  "description": "Mobile-first nutrition, macros, cardio, and fat-loss progress tracker.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070714",
+  "theme_color": "#070714",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
