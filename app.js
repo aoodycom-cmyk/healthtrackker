@@ -31,16 +31,14 @@ const defaultState = {
   foodLogs: [],
   cardioLogs: [],
   progressLogs: [],
-  bodyPhotos: [],
   savedDays: [],
 };
 
-const stateCollections = ["foods", "sauces", "meals", "foodLogs", "cardioLogs", "progressLogs", "bodyPhotos", "savedDays"];
+const stateCollections = ["foods", "sauces", "meals", "foodLogs", "cardioLogs", "progressLogs", "savedDays"];
 
 let state = loadState();
 let activeDate = todayISO();
 let editing = {};
-let activeProgressTab = "metrics";
 let usdaSearchTimer = null;
 let usdaResults = [];
 let aiLastResponse = "";
@@ -61,7 +59,7 @@ function loadState() {
     stateCollections.forEach((key) => {
       if (!Array.isArray(merged[key])) merged[key] = base[key];
     });
-    return merged;
+    return stripStoredPhotos(merged);
   } catch {
     return structuredClone(defaultState);
   }
@@ -69,6 +67,7 @@ function loadState() {
 
 function saveState() {
   try {
+    state = stripStoredPhotos(state);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     storageWarningShown = false;
     return true;
@@ -80,6 +79,16 @@ function saveState() {
     }
     return false;
   }
+}
+
+function stripStoredPhotos(nextState) {
+  return {
+    ...nextState,
+    bodyPhotos: [],
+    progressLogs: Array.isArray(nextState.progressLogs)
+      ? nextState.progressLogs.map(({ photo, ...entry }) => entry)
+      : [],
+  };
 }
 
 function loadSettingsOnly() {
@@ -888,7 +897,6 @@ function renderAdd() {
         <div class="field"><label>التاريخ</label><input class="input" name="date" type="date" value="${activeDate}" /></div>
         <div class="field"><label>الوزن</label><input class="input" name="weight" type="number" step="0.1" required /></div>
         <div class="field"><label>الخصر</label><input class="input" name="waist" type="number" step="0.1" required /></div>
-        <div class="field"><label>صورة اختيارية</label><input class="input" name="photo" type="file" accept="image/*" /></div>
         <div class="field"><label>ملاحظات</label><input class="input" name="notes" /></div>
       </div>
       <div class="actions"><button class="btn" type="submit">حفظ القياس</button></div>
@@ -1084,17 +1092,11 @@ function renderProgress() {
   document.querySelector("#progress").innerHTML = `
     <div class="split-title"><h2>التقدم</h2><span class="pill">${logs.length} قياس</span></div>
     <p class="section-kicker">اتجاه الجسم أهم من رقم يوم واحد. راقب الوزن والخصر والعجز معاً.</p>
-    <div class="progress-tabs">
-      <button class="${activeProgressTab === "metrics" ? "active" : ""}" data-progress-tab="metrics">المؤشرات</button>
-      <button class="${activeProgressTab === "photos" ? "active" : ""}" data-progress-tab="photos">صور الجسم</button>
-    </div>
-    ${activeProgressTab === "photos" ? renderBodyPhotos() : `
     <form class="panel" id="progressForm">
       <div class="field-grid">
         <div class="field"><label>التاريخ</label><input class="input" name="date" type="date" value="${activeDate}" /></div>
         <div class="field"><label>الوزن</label><input class="input" name="weight" type="number" step="0.1" required /></div>
         <div class="field"><label>محيط الخصر</label><input class="input" name="waist" type="number" step="0.1" required /></div>
-        <div class="field"><label>صورة الجسم اختيارية</label><input class="input" name="photo" type="file" accept="image/*" /></div>
         <div class="field"><label>ملاحظات</label><input class="input" name="notes" /></div>
       </div>
       <div class="actions"><button class="btn" type="submit">تسجيل القياس</button></div>
@@ -1124,17 +1126,14 @@ function renderProgress() {
       <article class="chart-card"><h3>المتوسط الأسبوعي</h3><canvas class="chart" id="weeklyAverageChart"></canvas></article>
     </div>
     <div class="list">${logs.slice().reverse().map(renderProgressItem).join("") || `<div class="list-item"><p class="item-meta">لا توجد قياسات بعد.</p></div>`}</div>
-    `}
   `;
   document.querySelector("#progressForm")?.addEventListener("submit", saveProgress);
-  document.querySelector("#bodyPhotoForm")?.addEventListener("submit", saveBodyPhoto);
   drawChart("weightChart", logs.map((item) => ({ label: item.date.slice(5), value: item.weight })), "#2563eb");
   drawChart("waistChart", logs.map((item) => ({ label: item.date.slice(5), value: item.waist })), "#0f766e");
   const dates = getWeekDates();
   drawChart("progressDeficitChart", dates.map((date) => ({ label: date.slice(5), value: dayDeficit(date) })), "#34d399");
   drawChart("progressCardioChart", dates.map((date) => ({ label: date.slice(5), value: dayCardio(date) })), "#f59e0b");
   drawChart("weeklyAverageChart", dates.map((date) => ({ label: date.slice(5), value: dayFood(date).calories })), "#a78bfa");
-  updateCompareSlider();
 }
 
 function bestProgressWeek() {
@@ -1174,80 +1173,6 @@ function progressIntelligence(logs) {
   };
 }
 
-function renderBodyPhotos() {
-  const photos = [...(state.bodyPhotos || [])].sort(byDate);
-  const before = photos[0];
-  const after = photos.at(-1);
-  return `
-    <form class="panel" id="bodyPhotoForm">
-      <div class="split-title"><h3>Body Photos</h3><span class="pill info">Front · Side · Back</span></div>
-      <div class="field-grid">
-        <div class="field"><label>التاريخ</label><input class="input" name="date" type="date" value="${activeDate}" /></div>
-        <div class="field"><label>Front</label><input class="input" name="front" type="file" accept="image/*" /></div>
-        <div class="field"><label>Side</label><input class="input" name="side" type="file" accept="image/*" /></div>
-        <div class="field"><label>Back</label><input class="input" name="back" type="file" accept="image/*" /></div>
-        <div class="field"><label>ملاحظات</label><input class="input" name="notes" /></div>
-      </div>
-      <div class="actions"><button class="btn" type="submit">حفظ الصور</button></div>
-    </form>
-    <section class="photo-compare panel">
-      <div class="split-title"><h3>Before / After</h3><span class="pill">${photos.length} جلسات</span></div>
-      ${before && after && (before.front || after.front) ? `
-        <div class="compare-frame" style="--compare:50%">
-          <img src="${before.front || before.side || before.back}" alt="Before" />
-          <div class="after-layer"><img src="${after.front || after.side || after.back}" alt="After" /></div>
-          <span class="compare-label before">Before</span>
-          <span class="compare-label after">After</span>
-        </div>
-        <input class="compare-slider" id="compareSlider" type="range" min="0" max="100" value="50" />
-      ` : `<div class="photo-placeholder">${icon("camera")}<strong>أضف صورتين للمقارنة</strong><span>Front / Side / Back لكل تاريخ</span></div>`}
-    </section>
-    <section class="photo-timeline">
-      ${photos.slice().reverse().map(renderPhotoSession).join("") || `<article class="list-item"><p class="item-meta">لا توجد صور بعد.</p></article>`}
-    </section>
-  `;
-}
-
-function renderPhotoSession(item) {
-  return `
-    <article class="photo-session">
-      <div class="item-head">
-        <div><p class="item-title">${item.date}</p><p class="item-meta">${item.notes || "Body check-in"}</p></div>
-        <button class="btn icon danger" data-delete-photo="${item.id}" title="حذف">×</button>
-      </div>
-      <div class="photo-grid">
-        ${["front", "side", "back"].map((key) => item[key] ? `<figure><img src="${item[key]}" alt="${key}" /><figcaption>${key}</figcaption></figure>` : `<figure class="empty-shot"><span>${key}</span></figure>`).join("")}
-      </div>
-    </article>
-  `;
-}
-
-async function saveBodyPhoto(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const data = Object.fromEntries(new FormData(form));
-  const photo = async (name) => form[name].files[0] ? fileToDataUrl(form[name].files[0]) : "";
-  state.bodyPhotos = state.bodyPhotos || [];
-  state.bodyPhotos.push({
-    id: crypto.randomUUID(),
-    date: data.date,
-    front: await photo("front"),
-    side: await photo("side"),
-    back: await photo("back"),
-    notes: data.notes,
-  });
-  render();
-}
-
-function updateCompareSlider() {
-  const slider = document.querySelector("#compareSlider");
-  const frame = document.querySelector(".compare-frame");
-  if (!slider || !frame) return;
-  const apply = () => frame.style.setProperty("--compare", `${slider.value}%`);
-  slider.addEventListener("input", apply);
-  apply();
-}
-
 function renderProgressItem(item) {
   return `
     <article class="list-item">
@@ -1256,58 +1181,18 @@ function renderProgressItem(item) {
           <p class="item-title">${item.date}</p>
           <p class="item-meta">${item.weight} كجم · خصر ${item.waist} سم ${item.notes ? `· ${item.notes}` : ""}</p>
         </div>
-        ${item.photo ? `<img class="photo-thumb" src="${item.photo}" alt="صورة تقدم" />` : ""}
         <button class="btn icon danger" data-delete-progress="${item.id}">×</button>
       </div>
     </article>
   `;
 }
 
-async function saveProgress(event) {
+function saveProgress(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = Object.fromEntries(new FormData(form));
-  const file = form.photo.files[0];
-  const photo = file ? await fileToDataUrl(file) : "";
-  state.progressLogs.push({ id: crypto.randomUUID(), date: data.date, weight: Number(data.weight), waist: Number(data.waist), notes: data.notes, photo });
+  state.progressLogs.push({ id: crypto.randomUUID(), date: data.date, weight: Number(data.weight), waist: Number(data.waist), notes: data.notes });
   render();
-}
-
-async function fileToDataUrl(file) {
-  if (file?.type?.startsWith("image/")) return compressImageFile(file);
-  return readFileAsDataUrl(file);
-}
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.readAsDataURL(file);
-  });
-}
-
-function compressImageFile(file, maxSize = 1280, quality = 0.78) {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const image = new Image();
-      image.onload = () => {
-        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-        const width = Math.max(1, Math.round(image.width * scale));
-        const height = Math.max(1, Math.round(image.height * scale));
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const context = canvas.getContext("2d");
-        context.drawImage(image, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-      image.onerror = () => resolve(reader.result);
-      image.src = reader.result;
-    };
-    reader.onerror = () => resolve("");
-    reader.readAsDataURL(file);
-  });
 }
 
 function renderCardio() {
@@ -1577,9 +1462,9 @@ function seedDemo() {
   ]));
   state.cardioLogs = state.cardioLogs.concat(dates.slice(0, 4).map((date) => ({ id: crypto.randomUUID(), date, type: "مشي سريع", minutes: 45, calories: 320, notes: "" })));
   state.progressLogs = state.progressLogs.concat([
-    { id: crypto.randomUUID(), date: dates[0], weight: 91.2, waist: 101, notes: "بداية", photo: "" },
-    { id: crypto.randomUUID(), date: dates[3], weight: 90.8, waist: 100.2, notes: "", photo: "" },
-    { id: crypto.randomUUID(), date: dates[6], weight: 90.7, waist: 99.4, notes: "الخصر نازل", photo: "" },
+    { id: crypto.randomUUID(), date: dates[0], weight: 91.2, waist: 101, notes: "بداية" },
+    { id: crypto.randomUUID(), date: dates[3], weight: 90.8, waist: 100.2, notes: "" },
+    { id: crypto.randomUUID(), date: dates[6], weight: 90.7, waist: 99.4, notes: "الخصر نازل" },
   ]);
   render();
 }
@@ -1589,11 +1474,6 @@ document.addEventListener("click", (event) => {
   if (!target) return;
   if (target.dataset.view) {
     setView(target.dataset.view);
-    return;
-  }
-  if (target.dataset.progressTab) {
-    activeProgressTab = target.dataset.progressTab;
-    render();
     return;
   }
   if (target.dataset.aiTask) {
@@ -1687,7 +1567,6 @@ function handleAction(target) {
   if (target.dataset.deleteMeal) state.meals = state.meals.filter((item) => item.id !== target.dataset.deleteMeal);
   if (target.dataset.removeComponent) editing.components.splice(Number(target.dataset.removeComponent), 1);
   if (target.dataset.deleteProgress) state.progressLogs = state.progressLogs.filter((item) => item.id !== target.dataset.deleteProgress);
-  if (target.dataset.deletePhoto) state.bodyPhotos = (state.bodyPhotos || []).filter((item) => item.id !== target.dataset.deletePhoto);
   if (target.dataset.deleteCardio) state.cardioLogs = state.cardioLogs.filter((item) => item.id !== target.dataset.deleteCardio);
   if (action === "cancel-edit") editing.foodLog = null;
   if (action === "cancel-food-db") editing.food = null;
