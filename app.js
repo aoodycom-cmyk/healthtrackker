@@ -1,4 +1,5 @@
 const STORAGE_KEY = "fatLossDashboard.v1";
+const SETTINGS_KEY = "fatLossDashboard.settings.v1";
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const defaultState = {
@@ -51,11 +52,12 @@ activeDateInput.value = activeDate;
 
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return structuredClone(defaultState);
+  const savedSettings = loadSettingsOnly();
+  if (!raw) return { ...structuredClone(defaultState), settings: savedSettings };
   try {
     const parsed = JSON.parse(raw);
     const base = structuredClone(defaultState);
-    const merged = { ...base, ...parsed, settings: normalizeSettings(parsed.settings) };
+    const merged = { ...base, ...parsed, settings: normalizeSettings({ ...(parsed.settings || {}), ...savedSettings }) };
     stateCollections.forEach((key) => {
       if (!Array.isArray(merged[key])) merged[key] = base[key];
     });
@@ -76,6 +78,25 @@ function saveState() {
       storageWarningShown = true;
       alert("تعذر حفظ البيانات محلياً. غالباً التخزين ممتلئ بسبب الصور. جرّب حذف صور قديمة أو استخدم صوراً أقل.");
     }
+    return false;
+  }
+}
+
+function loadSettingsOnly() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    return raw ? normalizeSettings(JSON.parse(raw)) : normalizeSettings();
+  } catch {
+    return normalizeSettings();
+  }
+}
+
+function saveSettingsOnly(settings) {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalizeSettings(settings)));
+    return true;
+  } catch (error) {
+    console.warn("Unable to save settings separately", error);
     return false;
   }
 }
@@ -1484,10 +1505,13 @@ function saveSettings(event) {
   const data = Object.fromEntries(new FormData(event.currentTarget));
   const nextSettings = { ...state.settings };
   Object.keys(defaultState.settings).forEach((key) => {
-    if (!Object.hasOwn(data, key)) return;
+    if (!Object.prototype.hasOwnProperty.call(data, key)) return;
     nextSettings[key] = finiteSetting(data[key], nextSettings[key]);
   });
   state.settings = normalizeSettings(nextSettings);
+  const settingsSaved = saveSettingsOnly(state.settings);
+  saveState();
+  alert(settingsSaved ? "تم حفظ الإعدادات." : "لم يتم حفظ الإعدادات. إذا كنت تستخدم Safari، اضغط Reduce Protections أو افتح الرابط في Safari مباشرة.");
   render();
 }
 
