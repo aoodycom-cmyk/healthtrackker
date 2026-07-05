@@ -1,5 +1,7 @@
 const STORAGE_KEY = "fatLossDashboard.v1";
 const SETTINGS_KEY = "fatLossDashboard.settings.v1";
+const BACKUP_KEY = "fatLossDashboard.backups.v1";
+const MAX_BACKUPS = 20;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const defaultState = {
@@ -43,6 +45,7 @@ let usdaSearchTimer = null;
 let usdaResults = [];
 let aiLastResponse = "";
 let storageWarningShown = false;
+let recoveryCandidates = [];
 
 const views = [...document.querySelectorAll(".view")];
 const activeDateInput = document.querySelector("#activeDate");
@@ -70,6 +73,7 @@ function loadState() {
 function saveState() {
   try {
     state = stripStoredPhotos(state);
+    writeStateBackup(localStorage.getItem(STORAGE_KEY));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     storageWarningShown = false;
     return true;
@@ -90,6 +94,93 @@ function saveState() {
     }
     return false;
   }
+}
+
+function parseStoredState(raw) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const hasKnownCollection = stateCollections.some((key) => Array.isArray(parsed[key]));
+    return hasKnownCollection ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function meaningfulDataCount(snapshot) {
+  if (!snapshot) return 0;
+  return ["foodLogs", "cardioLogs", "progressLogs", "savedDays", "meals"].reduce((sum, key) => sum + (Array.isArray(snapshot[key]) ? snapshot[key].length : 0), 0)
+    + Math.max(0, (snapshot.foods?.length || 0) - defaultState.foods.length)
+    + Math.max(0, (snapshot.sauces?.length || 0) - defaultState.sauces.length);
+}
+
+function snapshotSummary(snapshot) {
+  return {
+    foods: snapshot.foods?.length || 0,
+    sauces: snapshot.sauces?.length || 0,
+    meals: snapshot.meals?.length || 0,
+    foodLogs: snapshot.foodLogs?.length || 0,
+    cardioLogs: snapshot.cardioLogs?.length || 0,
+    progressLogs: snapshot.progressLogs?.length || 0,
+    savedDays: snapshot.savedDays?.length || 0,
+  };
+}
+
+function summaryText(summary) {
+  return `${summary.foodLogs} وجبة · ${summary.cardioLogs} كارديو · ${summary.progressLogs} قياس · ${summary.meals} وجبات جاهزة · ${summary.foods} أطعمة`;
+}
+
+function writeStateBackup(raw) {
+  const snapshot = parseStoredState(raw);
+  if (!snapshot || meaningfulDataCount(snapshot) === 0) return;
+  try {
+    const backups = JSON.parse(localStorage.getItem(BACKUP_KEY) || "[]").filter((item) => item?.raw);
+    if (backups[0]?.raw === raw) return;
+    backups.unshift({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), raw, summary: snapshotSummary(snapshot) });
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(backups.slice(0, MAX_BACKUPS)));
+  } catch (error) {
+    console.warn("Unable to write local backup", error);
+  }
+}
+
+function discoverRecoveryCandidates() {
+  const candidates = [];
+  const seen = new Set();
+  function addCandidate(source, raw, createdAt = "") {
+    const snapshot = parseStoredState(raw);
+    if (!snapshot || meaningfulDataCount(snapshot) === 0 || seen.has(raw)) return;
+    seen.add(raw);
+    candidates.push({ source, raw, createdAt, snapshot, summary: snapshotSummary(snapshot) });
+  }
+  try {
+    JSON.parse(localStorage.getItem(BACKUP_KEY) || "[]").forEach((item) => addCandidate("نسخة احتياطية", item.raw, item.createdAt));
+  } catch {}
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key || key === BACKUP_KEY) continue;
+    addCandidate(key, localStorage.getItem(key), "");
+  }
+  return candidates.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+function mergeRecoveryCandidate(index) {
+  const candidate = recoveryCandidates[Number(index)];
+  if (!candidate) return;
+  const next = structuredClone(state);
+  next.settings = normalizeSettings({ ...candidate.snapshot.settings, ...next.settings });
+  stateCollections.forEach((key) => {
+    const existing = new Set((next[key] || []).map((item) => item.id));
+    const incoming = Array.isArray(candidate.snapshot[key]) ? candidate.snapshot[key] : [];
+    next[key] = [...(next[key] || []), ...incoming.filter((item) => {
+      if (!item?.id) item.id = crypto.randomUUID();
+      if (existing.has(item.id)) return false;
+      existing.add(item.id);
+      return true;
+    })];
+  });
+  state = next;
+  alert("تم دمج النسخة التي وجدتها داخل المتصفح. راجع صفحة اليوم والتقدم.");
 }
 
 function stripStoredPhotos(nextState) {
@@ -1317,6 +1408,11 @@ function renderSettings() {
         </form>
       </details>
 
+      <details class="panel details-card" open>
+        <summary>استرجاع البيانات</summary>
+        ${recoveryTools()}
+      </details>
+
       <details class="panel details-card">
         <summary>قاعدة الأطعمة والصوصات</summary>
         <div class="subform">
@@ -1340,6 +1436,35 @@ function renderSettings() {
   document.querySelector("#dbSearch").addEventListener("input", renderDbList);
   document.querySelector("#mealForm").addEventListener("submit", saveMeal);
   renderDbList();
+}
+
+function recoveryTools() {
+  recoveryCandidates = discoverRecoveryCandidates();
+  if (!recoveryCandidates.length) {
+    return `
+      <div class="subform">
+        <p class="compact-note">لم أجد نسخة بيانات قديمة داخل هذا المتصفح حالياً. من الآن سيحفظ التطبيق نسخاً احتياطية محلية قبل كل تحديث.</p>
+      </div>
+    `;
+  }
+  return `
+    <div class="subform">
+      <p class="compact-note">هذه نسخ وجدتها داخل نفس المتصفح. زر الدمج لا يحذف الموجود، فقط يضيف السجلات الناقصة.</p>
+      <div class="list">
+        ${recoveryCandidates.map((candidate, index) => `
+          <article class="list-item">
+            <div class="item-head">
+              <div>
+                <p class="item-title">${candidate.source}</p>
+                <p class="item-meta">${summaryText(candidate.summary)}${candidate.createdAt ? ` · ${new Date(candidate.createdAt).toLocaleString("ar-SA")}` : ""}</p>
+              </div>
+              <button class="btn secondary" type="button" data-restore-snapshot="${index}">دمج هذه النسخة</button>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </div>
+  `;
 }
 
 function saveApiSettings(event) {
@@ -1542,6 +1667,7 @@ function isCommandButton(target) {
     "removeComponent",
     "deleteProgress",
     "deleteCardio",
+    "restoreSnapshot",
   ];
   return commandKeys.some((key) => target.dataset[key] !== undefined);
 }
@@ -1631,6 +1757,7 @@ function handleAction(target) {
   if (target.dataset.removeComponent) editing.components.splice(Number(target.dataset.removeComponent), 1);
   if (target.dataset.deleteProgress) state.progressLogs = state.progressLogs.filter((item) => item.id !== target.dataset.deleteProgress);
   if (target.dataset.deleteCardio) state.cardioLogs = state.cardioLogs.filter((item) => item.id !== target.dataset.deleteCardio);
+  if (target.dataset.restoreSnapshot) mergeRecoveryCandidate(target.dataset.restoreSnapshot);
   if (action === "cancel-edit") editing.foodLog = null;
   if (action === "cancel-food-db") editing.food = null;
   if (action === "cancel-sauce-db") editing.sauce = null;
