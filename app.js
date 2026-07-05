@@ -654,6 +654,7 @@ function sauceOptions(selected = "") {
 function renderFoodLog() {
   const editingEntry = state.foodLogs.find((entry) => entry.id === editing.foodLog);
   const entries = state.foodLogs.filter((entry) => entry.date === activeDate);
+  const cardioEntries = state.cardioLogs.filter((entry) => entry.date === activeDate);
   const food = dayFood();
   document.querySelector("#food-log").innerHTML = `
     <div class="split-title"><h2>اليوم</h2><span class="pill good">${formatNumber(food.calories)} سعرة</span></div>
@@ -676,6 +677,20 @@ function renderFoodLog() {
         <button class="btn secondary" type="button" data-action="save-day">حفظ يومي المتكرر</button>
       </div>
     </form>
+    <form class="panel daily-cardio-panel" id="dailyCardioForm">
+      <div class="split-title"><h3>تسجيل كارديو اليوم</h3><span class="pill">${formatNumber(dayCardio())} سعرة اليوم</span></div>
+      <div class="field-grid">
+        <div class="field"><label>نوع التمرين</label><input class="input" name="type" required placeholder="مشي سريع، سير، دراجة..." /></div>
+        <div class="field"><label>المدة بالدقائق</label><input class="input" name="minutes" type="number" min="1" step="1" required placeholder="30" /></div>
+        <div class="field"><label>السعرات المحروقة</label><input class="input" name="calories" type="number" min="1" step="1" required placeholder="250" /></div>
+        <div class="field"><label>ملاحظات</label><input class="input" name="notes" placeholder="اختياري" /></div>
+      </div>
+      <input type="hidden" name="date" value="${activeDate}" />
+      <div class="actions"><button class="btn" type="submit">حفظ الكارديو</button></div>
+    </form>
+    <div class="list daily-cardio-list">
+      ${cardioEntries.map(renderCardioItem).join("") || `<div class="list-item"><p class="item-meta">لا يوجد كارديو مسجل لهذا اليوم.</p></div>`}
+    </div>
     <div class="panel">
       <h3>نسخ وحفظ الأيام</h3>
       <div class="two-cols">
@@ -698,6 +713,7 @@ function renderFoodLog() {
   if (editingEntry) form.source.value = `${editingEntry.sourceType}:${editingEntry.itemId}`;
   form.addEventListener("input", updateFoodPreview);
   form.addEventListener("submit", saveFoodEntry);
+  document.querySelector("#dailyCardioForm").addEventListener("submit", saveCardio);
   updateFoodPreview();
 }
 
@@ -1542,8 +1558,8 @@ function handleAction(target) {
   }
   if (action === "quick-cardio") {
     closeQuickAdd();
-    setView("add");
-    requestAnimationFrame(() => document.querySelector("#addCardioForm")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    setView("food-log");
+    requestAnimationFrame(() => document.querySelector("#dailyCardioForm")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     return;
   }
   if (action === "quick-food-search") {
@@ -1634,7 +1650,7 @@ function handleAction(target) {
   if (action === "apply-saved-day") applySavedDay();
   if (action === "delete-saved-day") deleteSavedDay();
   if (action === "focus-cardio") {
-    document.querySelector("#addCardioForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.querySelector("#addCardioForm, #dailyCardioForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
     return;
   }
   if (action === "focus-weight") {
