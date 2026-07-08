@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#070714" />
+    <title>إنقاذ بيانات Healthtrackker</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #070714;
+        --card: rgba(18, 20, 48, 0.84);
+        --line: rgba(255, 255, 255, 0.14);
+        --ink: #f8fbff;
+        --muted: #a9b4cc;
+        --primary: #00e5ff;
+        --green: #22c55e;
+        --red: #ff3b6b;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 15% 0%, rgba(0, 229, 255, 0.28), transparent 32%),
+          radial-gradient(circle at 90% 18%, rgba(168, 85, 247, 0.22), transparent 30%),
+          linear-gradient(180deg, #070714, #10102b 55%, #080817);
+        color: var(--ink);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+      }
+
+      main {
+        width: min(760px, calc(100% - 28px));
+        margin: 0 auto;
+        padding: 26px 0 40px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: var(--card);
+        padding: 18px;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 24px;
+      }
+
+      p {
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .warning {
+        border-color: rgba(255, 59, 107, 0.34);
+        background: rgba(255, 59, 107, 0.12);
+        color: #ffe4e6;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .metric small {
+        display: block;
+        color: var(--muted);
+        font-weight: 800;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 5px;
+        font-size: 24px;
+      }
+
+      button, a.button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 52px;
+        margin-top: 12px;
+        border: 0;
+        border-radius: 18px;
+        background: linear-gradient(135deg, var(--primary), var(--green));
+        color: #06111b;
+        font: inherit;
+        font-weight: 950;
+        text-decoration: none;
+      }
+
+      button.secondary {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--ink);
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 280px;
+        margin-top: 12px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--ink);
+        padding: 12px;
+        font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        direction: ltr;
+      }
+
+      .status {
+        margin-top: 12px;
+        color: #bbf7d0;
+        font-weight: 850;
+      }
+
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card">
+        <h1>إنقاذ بيانات التطبيق</h1>
+        <p>هذه الصفحة تقرأ بيانات Healthtrackker من نفس متصفح الجوال فقط. لا تستورد، لا تحذف، ولا تعدل أي شيء.</p>
+        <p class="card warning">إذا بياناتك ظاهرة وسليمة في التطبيق، استخدم هذه الصفحة فقط للتصدير أو النسخ. لا تضغط تصفير داخل التطبيق.</p>
+        <div class="grid" id="metrics"></div>
+        <button id="downloadBtn" type="button">تحميل ملف النسخة</button>
+        <button id="copyBtn" class="secondary" type="button">نسخ البيانات كنص</button>
+        <textarea id="backupText" readonly></textarea>
+        <p class="status" id="status"></p>
+      </section>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "fatLossDashboard.v1";
+      const SETTINGS_KEY = "fatLossDashboard.settings.v1";
+      const BACKUP_KEY = "fatLossDashboard.backups.v1";
+
+      function safeParse(raw) {
+        try {
+          return raw ? JSON.parse(raw) : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function listCount(state, key) {
+        return Array.isArray(state?.[key]) ? state[key].length : 0;
+      }
+
+      function buildPayload() {
+        const state = safeParse(localStorage.getItem(STORAGE_KEY));
+        const settings = safeParse(localStorage.getItem(SETTINGS_KEY));
+        const backups = safeParse(localStorage.getItem(BACKUP_KEY));
+        const allKeys = {};
+        for (let index = 0; index < localStorage.length; index += 1) {
+          const key = localStorage.key(index);
+          if (!key) continue;
+          if (key.includes("fatLossDashboard")) allKeys[key] = localStorage.getItem(key);
+        }
+        return {
+          app: "healthtrackker",
+          rescueVersion: 1,
+          exportedAt: new Date().toISOString(),
+          origin: location.origin,
+          state,
+          settings,
+          backups,
+          rawLocalStorage: allKeys
+        };
+      }
+
+      function render() {
+        const payload = buildPayload();
+        const state = payload.state || {};
+        const metrics = [
+          ["الأطعمة", listCount(state, "foods")],
+          ["الصوصات", listCount(state, "sauces")],
+          ["الوجبات الجاهزة", listCount(state, "meals")],
+          ["سجلات الأكل", listCount(state, "foodLogs")],
+          ["الكارديو", listCount(state, "cardioLogs")],
+          ["القياسات", listCount(state, "progressLogs")]
+        ];
+        document.querySelector("#metrics").innerHTML = metrics.map(([label, value]) => `
+          <article class="metric"><small>${label}</small><strong>${value}</strong></article>
+        `).join("");
+        document.querySelector("#backupText").value = JSON.stringify(payload, null, 2);
+        if (!payload.state) {
+          document.querySelector("#status").textContent = "لم أجد fatLossDashboard.v1 في هذا المتصفح. افتح هذه الصفحة من نفس المتصفح الذي تظهر فيه بياناتك.";
+        } else {
+          document.querySelector("#status").textContent = "تم العثور على بيانات. حمّل الملف أو انسخ النص وأرسله.";
+        }
+      }
+
+      function downloadBackup() {
+        const payload = document.querySelector("#backupText").value;
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `healthtrackker-phone-rescue-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      async function copyBackup() {
+        const text = document.querySelector("#backupText").value;
+        try {
+          await navigator.clipboard.writeText(text);
+          document.querySelector("#status").textContent = "تم نسخ البيانات. أرسلها الآن.";
+        } catch {
+          const textarea = document.querySelector("#backupText");
+          textarea.focus();
+          textarea.select();
+          document.execCommand("copy");
+          document.querySelector("#status").textContent = "تم تحديد النص. انسخه وأرسله.";
+        }
+      }
+
+      document.querySelector("#downloadBtn").addEventListener("click", downloadBackup);
+      document.querySelector("#copyBtn").addEventListener("click", copyBackup);
+      render();
+    </script>
+  </body>
+</html>
