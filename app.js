@@ -1,7 +1,7 @@
 const STORAGE_KEY = "fatLossDashboard.v1";
 const SETTINGS_KEY = "fatLossDashboard.settings.v1";
 const BACKUP_KEY = "fatLossDashboard.backups.v1";
-const MAX_BACKUPS = 20;
+const MAX_BACKUPS = 1;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const defaultState = {
@@ -46,6 +46,7 @@ let usdaResults = [];
 let aiLastResponse = "";
 let storageWarningShown = false;
 let recoveryCandidates = [];
+let activeDashboardInsight = "";
 
 const views = [...document.querySelectorAll(".view")];
 const activeDateInput = document.querySelector("#activeDate");
@@ -508,7 +509,7 @@ function renderDashboard() {
 
   document.querySelector("#dashboard").innerHTML = `
     <div class="dashboard-layout">
-      <section class="hero-card">
+      <button class="hero-card insight-trigger" type="button" data-action="show-insight" data-insight="calories">
         <div class="energy-glow"></div>
         <div class="hero-top">
           <div>
@@ -531,7 +532,7 @@ function renderDashboard() {
           <div><small>تبقى</small><strong>${formatNumber(remaining)} سعرة</strong></div>
           <div><small>العجز اليوم</small><strong>${formatNumber(dailyDeficit)}</strong></div>
         </div>
-      </section>
+      </button>
 
       <section class="macro-grid" aria-label="الماكروز">
         ${macroCard("protein", "Protein", food.protein, state.settings.proteinGoal, "g", "protein")}
@@ -540,6 +541,7 @@ function renderDashboard() {
         ${macroCard("cardio", "Cardio", cardio, Math.max(state.settings.weeklyCardioGoal / 7, 1), "cal", "cardio")}
       </section>
     </div>
+    ${activeDashboardInsight ? renderComplianceInsight(activeDashboardInsight) : ""}
 
     <section class="coach-card">
       <div class="coach-avatar">${icon("coach")}</div>
@@ -576,7 +578,7 @@ function renderDashboard() {
 function macroCard(iconName, label, actual, goal, unit, className) {
   const value = percent(actual, goal);
   return `
-    <article class="macro-card">
+    <button class="macro-card insight-trigger" type="button" data-action="show-insight" data-insight="${className}">
       <div class="macro-head">
         <span class="icon-bubble" style="--icon-color:${className === "protein" ? "#34d399" : className === "carbs" ? "#60a5fa" : className === "fat" ? "#a78bfa" : "#f59e0b"}">${icon(iconName)}</span>
         <span class="pill">${formatNumber(value)}%</span>
@@ -585,7 +587,7 @@ function macroCard(iconName, label, actual, goal, unit, className) {
       <p class="macro-value">${formatNumber(actual)} <span>/ ${formatNumber(goal)} ${unit}</span></p>
       ${progressBar(value, className)}
       <div class="macro-foot"><span>الهدف</span><span>${formatNumber(goal)} ${unit}</span></div>
-    </article>
+    </button>
   `;
 }
 
@@ -616,11 +618,11 @@ function progressMini(iconName, label, value, unit, delta, lowerIsGood = false) 
 
 function scoreCard(label, value, iconName, tone) {
   return `
-    <article class="score-card ${tone}">
+    <button class="score-card ${tone} insight-trigger" type="button" data-action="show-insight" data-insight="${label === "Streak" ? "consistency" : label.toLowerCase()}">
       <span class="icon-bubble">${icon(iconName)}</span>
       <small>${label}</small>
       <strong>${value}</strong>
-    </article>
+    </button>
   `;
 }
 
@@ -695,8 +697,10 @@ function weekProteinAverage() {
   return dates.reduce((sum, date) => sum + dayFood(date).protein, 0) / 7;
 }
 
-function weeklyMini(label, value, note = "") {
-  return `<article class="mini-card"><small>${label}</small><strong>${value}</strong><span class="compact-note">${note}</span></article>`;
+function weeklyMini(label, value, note = "", insight = "") {
+  const attrs = insight ? `type="button" data-action="show-insight" data-insight="${insight}"` : "";
+  const tag = insight ? "button" : "article";
+  return `<${tag} class="mini-card ${insight ? "insight-trigger" : ""}" ${attrs}><small>${label}</small><strong>${value}</strong><span class="compact-note">${note}</span></${tag}>`;
 }
 
 function renderWeeklySummary() {
@@ -705,11 +709,92 @@ function renderWeeklySummary() {
   return `
     <div class="section-title"><h2>Weekly Summary</h2><span class="pill good">${formatNumber(week.deficit)} عجز</span></div>
     <section class="weekly-strip">
-      ${weeklyMini("العجز الأسبوعي", formatNumber(week.deficit), "سعرة")}
-      ${weeklyMini("متوسط السعرات", formatNumber(averageCalories), "يومياً")}
-      ${weeklyMini("أيام الالتزام", `${adherenceDays()} / 7`, "ضمن السعرات والبروتين")}
-      ${weeklyMini("جلسات الكارديو", cardioSessionsThisWeek(), `${formatNumber(week.cardio)} سعرة`)}
-      ${weeklyMini("متوسط البروتين", `${formatNumber(weekProteinAverage())} g`, "يومياً")}
+      ${weeklyMini("العجز الأسبوعي", formatNumber(week.deficit), "سعرة", "calories")}
+      ${weeklyMini("متوسط السعرات", formatNumber(averageCalories), "يومياً", "calories")}
+      ${weeklyMini("أيام الالتزام", `${adherenceDays()} / 7`, "اضغط للتفاصيل", "consistency")}
+      ${weeklyMini("جلسات الكارديو", cardioSessionsThisWeek(), `${formatNumber(week.cardio)} سعرة`, "cardio")}
+      ${weeklyMini("متوسط البروتين", `${formatNumber(weekProteinAverage())} g`, "يومياً", "protein")}
+    </section>
+  `;
+}
+
+function dayLabel(dateISO) {
+  return new Date(`${dateISO}T12:00:00`).toLocaleDateString("ar-SA", { weekday: "long", month: "short", day: "numeric" });
+}
+
+function dayInsight(dateISO) {
+  const food = dayFood(dateISO);
+  const cardio = dayCardio(dateISO);
+  const logged = food.calories > 0 || cardio > 0;
+  const calorieDelta = state.settings.targetCalories - food.calories;
+  const proteinDelta = food.protein - state.settings.minProtein;
+  const fatDelta = state.settings.maxFat - food.fat;
+  const ok = logged && calorieDelta >= 0 && proteinDelta >= 0 && fatDelta >= 0;
+  const issues = [];
+  if (!logged) issues.push("غير مسجل");
+  if (logged && calorieDelta < 0) issues.push(`زيادة سعرات ${formatNumber(Math.abs(calorieDelta))}`);
+  if (logged && proteinDelta < 0) issues.push(`نقص بروتين ${formatNumber(Math.abs(proteinDelta))}g`);
+  if (logged && fatDelta < 0) issues.push(`دهون زائدة ${formatNumber(Math.abs(fatDelta))}g`);
+  if (logged && ok) issues.push("ملتزم");
+  return { dateISO, food, cardio, logged, ok, calorieDelta, proteinDelta, fatDelta, issues };
+}
+
+function renderComplianceInsight(type = "consistency") {
+  const dates = getWeekDates();
+  const rows = dates.map(dayInsight);
+  const loggedRows = rows.filter((row) => row.logged);
+  const calorieBalance = loggedRows.reduce((sum, row) => sum + row.calorieDelta, 0);
+  const proteinBalance = loggedRows.reduce((sum, row) => sum + row.proteinDelta, 0);
+  const fatBalance = loggedRows.reduce((sum, row) => sum + row.fatDelta, 0);
+  const remainingDays = Math.max(1, rows.filter((row) => row.dateISO >= activeDate).length);
+  const titleMap = {
+    calories: "تفاصيل السعرات والالتزام",
+    protein: "تفاصيل البروتين والتعويض",
+    carbs: "تفاصيل الكارب",
+    fat: "تفاصيل الدهون",
+    cardio: "تفاصيل الكارديو",
+    nutrition: "تفاصيل التغذية",
+    consistency: "تفاصيل أيام الالتزام",
+  };
+  const proteinAdvice = proteinBalance >= 0
+    ? `بروتين الأسبوع المسجل زائد ${formatNumber(proteinBalance)}g عن الحد الأدنى.`
+    : `نقص البروتين المسجل ${formatNumber(Math.abs(proteinBalance))}g، عوضه بمتوسط ${formatNumber(Math.abs(proteinBalance) / remainingDays)}g في الأيام المتبقية.`;
+  const calorieAdvice = calorieBalance >= 0
+    ? `عندك مساحة ${formatNumber(calorieBalance)} سعرة ضمن الأيام المسجلة.`
+    : `عندك زيادة ${formatNumber(Math.abs(calorieBalance))} سعرة؛ عوضها بتقليل ${formatNumber(Math.abs(calorieBalance) / remainingDays)} سعرة يومياً أو كارديو.`;
+  const fatAdvice = fatBalance >= 0
+    ? `الدهون ضمن الحد في الأيام المسجلة.`
+    : `الدهون زادت ${formatNumber(Math.abs(fatBalance))}g؛ خل وجباتك القادمة أخف صوص وزيوت.`;
+  return `
+    <section class="panel insight-panel" id="dashboardInsight">
+      <div class="split-title">
+        <h2>${titleMap[type] || "تفاصيل الالتزام"}</h2>
+        <button class="btn icon secondary" type="button" data-action="close-insight" title="إغلاق">×</button>
+      </div>
+      <div class="insight-summary">
+        ${metric("ميزان السعرات", `${calorieBalance >= 0 ? "+" : ""}${formatNumber(calorieBalance)}`, calorieAdvice)}
+        ${metric("ميزان البروتين", `${proteinBalance >= 0 ? "+" : ""}${formatNumber(proteinBalance)}g`, proteinAdvice)}
+        ${metric("ميزان الدهون", `${fatBalance >= 0 ? "+" : ""}${formatNumber(fatBalance)}g`, fatAdvice)}
+      </div>
+      <div class="list insight-days">
+        ${rows.map((row) => `
+          <article class="list-item insight-day ${row.ok ? "good" : row.logged ? "warn" : ""}">
+            <div class="item-head">
+              <div>
+                <p class="item-title">${dayLabel(row.dateISO)}</p>
+                <p class="item-meta">${row.issues.join(" · ")}</p>
+                <div class="meal-macros">
+                  <span class="pill ${row.calorieDelta >= 0 ? "good" : "bad"}">${row.calorieDelta >= 0 ? "متبقي" : "زائد"} ${formatNumber(Math.abs(row.calorieDelta))} سعرة</span>
+                  <span class="pill ${row.proteinDelta >= 0 ? "good" : "warn"}">${row.proteinDelta >= 0 ? "بروتين +" : "بروتين -"}${formatNumber(Math.abs(row.proteinDelta))}g</span>
+                  <span class="pill ${row.fatDelta >= 0 ? "good" : "bad"}">${row.fatDelta >= 0 ? "دهون متاحة" : "دهون زائدة"} ${formatNumber(Math.abs(row.fatDelta))}g</span>
+                  <span class="pill info">كارديو ${formatNumber(row.cardio)} سعرة</span>
+                </div>
+              </div>
+              <button class="btn secondary" type="button" data-set-date="${row.dateISO}">فتح اليوم</button>
+            </div>
+          </article>
+        `).join("")}
+      </div>
     </section>
   `;
 }
@@ -733,9 +818,16 @@ function renderMonthlySummary() {
 }
 
 function sourceOptions() {
-  const foods = state.foods.map((item) => `<option value="food:${item.id}">${item.name} - ${item.category}</option>`);
-  const meals = state.meals.map((item) => `<option value="meal:${item.id}">${item.name} - وجبة جاهزة</option>`);
-  return `<option value="">اختر صنفاً</option>${meals.join("")}${foods.join("")}`;
+  const mealOptions = state.meals.map((item) => `<option value="meal:${item.id}">${item.name}</option>`).join("");
+  const categories = [...new Set(state.foods.map((item) => item.category || "أطعمة"))];
+  const foodGroups = categories.map((category) => {
+    const options = state.foods
+      .filter((item) => (item.category || "أطعمة") === category)
+      .map((item) => `<option value="food:${item.id}">${item.name}</option>`)
+      .join("");
+    return `<optgroup label="${category}">${options}</optgroup>`;
+  }).join("");
+  return `<option value="">اختر صنفاً</option>${mealOptions ? `<optgroup label="وجبات جاهزة">${mealOptions}</optgroup>` : ""}${foodGroups}`;
 }
 
 function sauceOptions(selected = "") {
@@ -765,7 +857,6 @@ function renderFoodLog() {
       <div class="actions">
         <button class="btn" type="submit">${editingEntry ? "تحديث الوجبة" : "إضافة الوجبة"}</button>
         ${editingEntry ? `<button class="btn secondary" type="button" data-action="cancel-edit">إلغاء</button>` : ""}
-        <button class="btn secondary" type="button" data-action="save-day">حفظ يومي المتكرر</button>
       </div>
     </form>
     <form class="panel daily-cardio-panel" id="dailyCardioForm">
@@ -782,23 +873,7 @@ function renderFoodLog() {
     <div class="list daily-cardio-list">
       ${cardioEntries.map(renderCardioItem).join("") || `<div class="list-item"><p class="item-meta">لا يوجد كارديو مسجل لهذا اليوم.</p></div>`}
     </div>
-    <div class="panel">
-      <h3>نسخ وحفظ الأيام</h3>
-      <div class="two-cols">
-        <div class="field"><label>نسخ اليوم الحالي إلى</label><input id="copyTargetDate" class="input" type="date" value="${activeDate}" /></div>
-        <div class="field"><label>قوالب محفوظة</label><select id="savedDaySelect" class="select">
-          <option value="">اختر يوماً محفوظاً</option>
-          ${state.savedDays.map((day) => `<option value="${day.id}">${day.name}</option>`).join("")}
-        </select></div>
-      </div>
-      <div class="actions">
-        <button class="btn secondary" type="button" data-action="copy-active-day">نسخ لهذا التاريخ</button>
-        <button class="btn secondary" type="button" data-action="apply-saved-day">تطبيق القالب على اليوم</button>
-        <button class="btn danger" type="button" data-action="delete-saved-day">حذف القالب</button>
-      </div>
-      <p class="compact-note">القوالب تحفظ الوجبات والكميات والصوصات، ثم يمكن تطبيقها على أي تاريخ.</p>
-    </div>
-    <div class="list">${entries.map(renderFoodEntry).join("") || `<div class="list-item"><p class="item-meta">لا توجد وجبات مسجلة لهذا اليوم.</p></div>`}</div>
+    ${renderMealGroups(entries)}
   `;
   const form = document.querySelector("#foodForm");
   if (editingEntry) form.source.value = `${editingEntry.sourceType}:${editingEntry.itemId}`;
@@ -806,6 +881,30 @@ function renderFoodLog() {
   form.addEventListener("submit", saveFoodEntry);
   document.querySelector("#dailyCardioForm").addEventListener("submit", saveCardio);
   updateFoodPreview();
+}
+
+function renderMealGroups(entries) {
+  const slots = ["الفطور", "الغداء", "السناك", "العشاء", "وجبة إضافية"];
+  if (!entries.length) return `<div class="list"><div class="list-item"><p class="item-meta">لا توجد وجبات مسجلة لهذا اليوم.</p></div></div>`;
+  return `
+    <section class="meal-groups">
+      ${slots.map((slot) => {
+        const slotEntries = entries.filter((entry) => entry.slot === slot);
+        const totals = addMacros(slotEntries.map(entryMacros));
+        return `
+          <article class="meal-group">
+            <div class="meal-group-title">
+              <h3>${slot}</h3>
+              <span class="pill ${slotEntries.length ? "good" : ""}">${slotEntries.length ? `${formatNumber(totals.calories)} سعرة` : "فارغ"}</span>
+            </div>
+            <div class="list meal-group-list">
+              ${slotEntries.map(renderFoodEntry).join("") || `<div class="list-item empty-slot"><p class="item-meta">لا توجد أصناف في ${slot}.</p></div>`}
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </section>
+  `;
 }
 
 function renderFoodEntry(entry) {
@@ -1371,22 +1470,11 @@ function renderSettings() {
     <p class="section-kicker">الأهداف وقواعد البيانات في مكان واحد، بعيداً عن شاشة القرار اليومي.</p>
     <section class="quick-actions">
       <button class="quick-action" data-view="ai-coach" type="button"><span>${icon("coach")}</span>AI Coach</button>
-      <button class="quick-action secondary" data-action="focus-api-settings" type="button"><span>${icon("settings")}</span>APIs</button>
-      <button class="quick-action secondary" data-action="open-quick-add" type="button"><span>${icon("plus")}</span>Quick Add</button>
+      <button class="quick-action secondary" data-action="copy-ai-report" type="button"><span>${icon("spark")}</span>نسخ التقرير</button>
+      <button class="quick-action secondary" data-action="export-backup" type="button"><span>${icon("database")}</span>نسخة احتياطية</button>
     </section>
     <div class="more-stack">
-      <details class="panel details-card" id="apiSettings">
-        <summary>API Integrations</summary>
-        <form id="apiSettingsForm" class="subform">
-          <div class="field-grid">
-            <div class="field"><label>USDA API Key</label><input class="input" name="usda" type="password" value="${localStorage.getItem("USDA_API_KEY") || ""}" placeholder="Stored locally" /></div>
-            <div class="field"><label>OpenAI API Key</label><input class="input" name="openai" type="password" value="${localStorage.getItem("OPENAI_API_KEY") || ""}" placeholder="Stored locally" /></div>
-          </div>
-          <p class="compact-note">للتطبيق الثابت تُحفظ المفاتيح محلياً في المتصفح. للإنتاج الأفضل استخدام Backend Proxy يقرأ ملف env ولا يرسل المفاتيح للواجهة.</p>
-          <div class="actions"><button class="btn" type="submit">حفظ مفاتيح API</button></div>
-        </form>
-      </details>
-      <details class="panel details-card" open>
+      <details class="panel details-card">
         <summary>الأهداف والإعدادات</summary>
         <form id="settingsForm">
           <div class="field-grid">
@@ -1408,9 +1496,14 @@ function renderSettings() {
         </form>
       </details>
 
-      <details class="panel details-card" open>
-        <summary>استرجاع البيانات</summary>
+      <details class="panel details-card">
+        <summary>النسخ الاحتياطي والاسترجاع</summary>
         ${recoveryTools()}
+      </details>
+
+      <details class="panel details-card">
+        <summary>تقرير للذكاء الاصطناعي</summary>
+        ${aiReportTools()}
       </details>
 
       <details class="panel details-card">
@@ -1427,6 +1520,18 @@ function renderSettings() {
         <summary>بناء الوجبات الجاهزة</summary>
         ${mealBuilderInner()}
       </details>
+
+      <details class="panel details-card" id="apiSettings">
+        <summary>API Integrations</summary>
+        <form id="apiSettingsForm" class="subform">
+          <div class="field-grid">
+            <div class="field"><label>USDA API Key</label><input class="input" name="usda" type="password" value="${localStorage.getItem("USDA_API_KEY") || ""}" placeholder="Stored locally" /></div>
+            <div class="field"><label>OpenAI API Key</label><input class="input" name="openai" type="password" value="${localStorage.getItem("OPENAI_API_KEY") || ""}" placeholder="Stored locally" /></div>
+          </div>
+          <p class="compact-note">للتطبيق الثابت تُحفظ المفاتيح محلياً في المتصفح. للإنتاج الأفضل استخدام Backend Proxy يقرأ ملف env ولا يرسل المفاتيح للواجهة.</p>
+          <div class="actions"><button class="btn" type="submit">حفظ مفاتيح API</button></div>
+        </form>
+      </details>
     </div>
   `;
   document.querySelector("#settingsForm").addEventListener("submit", saveSettings);
@@ -1440,31 +1545,171 @@ function renderSettings() {
 
 function recoveryTools() {
   recoveryCandidates = discoverRecoveryCandidates();
-  if (!recoveryCandidates.length) {
-    return `
-      <div class="subform">
-        <p class="compact-note">لم أجد نسخة بيانات قديمة داخل هذا المتصفح حالياً. من الآن سيحفظ التطبيق نسخاً احتياطية محلية قبل كل تحديث.</p>
-      </div>
-    `;
-  }
+  const candidateList = recoveryCandidates.length ? `
+    <div class="list">
+      ${recoveryCandidates.map((candidate, index) => `
+        <article class="list-item">
+          <div class="item-head">
+            <div>
+              <p class="item-title">${candidate.source}</p>
+              <p class="item-meta">${summaryText(candidate.summary)}${candidate.createdAt ? ` · ${new Date(candidate.createdAt).toLocaleString("ar-SA")}` : ""}</p>
+            </div>
+            <button class="btn secondary" type="button" data-restore-snapshot="${index}">دمج هذه النسخة</button>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  ` : `<p class="compact-note">لا توجد نسخة قديمة قابلة للدمج داخل هذا المتصفح حالياً.</p>`;
   return `
     <div class="subform">
-      <p class="compact-note">هذه نسخ وجدتها داخل نفس المتصفح. زر الدمج لا يحذف الموجود، فقط يضيف السجلات الناقصة.</p>
-      <div class="list">
-        ${recoveryCandidates.map((candidate, index) => `
-          <article class="list-item">
-            <div class="item-head">
-              <div>
-                <p class="item-title">${candidate.source}</p>
-                <p class="item-meta">${summaryText(candidate.summary)}${candidate.createdAt ? ` · ${new Date(candidate.createdAt).toLocaleString("ar-SA")}` : ""}</p>
-              </div>
-              <button class="btn secondary" type="button" data-restore-snapshot="${index}">دمج هذه النسخة</button>
-            </div>
-          </article>
-        `).join("")}
+      <p class="compact-note">احتفظ بنسخة واحدة خارج المتصفح. التصدير يحفظ ملفاً يمكنك سحبه والاحتفاظ به، والاستيراد يدمج البيانات ولا يحذف الموجود.</p>
+      <div class="actions">
+        <button class="btn" type="button" data-action="export-backup">تصدير نسخة احتياطية</button>
+      </div>
+      <div class="field">
+        <label>استيراد نسخة محفوظة</label>
+        <input class="input" id="backupImportFile" type="file" accept="application/json" />
+      </div>
+      <div class="actions">
+        <button class="btn secondary" type="button" data-action="import-backup">استيراد ودمج</button>
+      </div>
+      ${candidateList}
+    </div>
+  `;
+}
+
+function aiReportTools() {
+  return `
+    <div class="subform">
+      <p class="compact-note">انسخ هذا التقرير وأرسله لأي تطبيق ذكاء اصطناعي لمتابعة جسمك وتقدمك.</p>
+      <textarea class="textarea report-box" id="aiReportText" readonly>${generateAIReport()}</textarea>
+      <div class="actions">
+        <button class="btn" type="button" data-action="copy-ai-report">نسخ التقرير</button>
       </div>
     </div>
   `;
+}
+
+function generateAIReport() {
+  const weekDates = getWeekDates();
+  const progressLogs = [...state.progressLogs].sort(byDate);
+  const latest = progressLogs.at(-1);
+  const previous = progressLogs.at(-2);
+  const week = weekStats();
+  const today = dayFood();
+  const adherence = adherenceDays();
+  const dayLines = weekDates.map((date) => {
+    const food = dayFood(date);
+    const cardio = dayCardio(date);
+    const insight = dayInsight(date);
+    return `- ${date}: سعرات ${formatNumber(food.calories)}, بروتين ${formatNumber(food.protein)}g, كارب ${formatNumber(food.carbs)}g, دهون ${formatNumber(food.fat)}g, كارديو ${formatNumber(cardio)} cal, الحالة: ${insight.issues.join(" / ")}`;
+  }).join("\n");
+  const mealsToday = state.foodLogs
+    .filter((entry) => entry.date === activeDate)
+    .map((entry) => {
+      const source = entry.sourceType === "meal" ? state.meals.find((item) => item.id === entry.itemId) : state.foods.find((item) => item.id === entry.itemId);
+      const macros = entryMacros(entry);
+      return `- ${entry.slot}: ${source?.name || "صنف محذوف"}، ${entry.grams}g، ${formatNumber(macros.calories)} سعرة، P ${formatNumber(macros.protein)}g / C ${formatNumber(macros.carbs)}g / F ${formatNumber(macros.fat)}g`;
+    }).join("\n") || "- لا توجد وجبات مسجلة اليوم.";
+  return `تقرير متابعة الجسم والتغذية
+التاريخ النشط: ${activeDate}
+
+الأهداف:
+- سعرات المحافظة: ${formatNumber(state.settings.maintenance)}
+- السعرات اليومية المستهدفة: ${formatNumber(state.settings.targetCalories)}
+- هدف البروتين: ${formatNumber(state.settings.proteinGoal)}g
+- الحد الأدنى للبروتين: ${formatNumber(state.settings.minProtein)}g
+- هدف الكارب: ${formatNumber(state.settings.carbsGoal)}g
+- هدف الدهون: ${formatNumber(state.settings.fatGoal)}g
+- حد الدهون الأعلى: ${formatNumber(state.settings.maxFat)}g
+- هدف الكارديو الأسبوعي: ${formatNumber(state.settings.weeklyCardioGoal)} cal
+
+اليوم:
+- السعرات: ${formatNumber(today.calories)} / ${formatNumber(state.settings.targetCalories)}
+- البروتين: ${formatNumber(today.protein)}g
+- الكارب: ${formatNumber(today.carbs)}g
+- الدهون: ${formatNumber(today.fat)}g
+- الكارديو: ${formatNumber(dayCardio())} cal
+- العجز التقريبي: ${formatNumber(dayDeficit())}
+
+وجبات اليوم:
+${mealsToday}
+
+ملخص الأسبوع:
+- أيام الالتزام: ${adherence} / 7
+- إجمالي السعرات المأكولة: ${formatNumber(week.actualCalories)}
+- إجمالي الكارديو: ${formatNumber(week.cardio)} cal
+- العجز الأسبوعي التقريبي: ${formatNumber(week.deficit)}
+- متوسط البروتين: ${formatNumber(weekProteinAverage())}g
+
+تفاصيل أيام الأسبوع:
+${dayLines}
+
+القياسات:
+- آخر وزن: ${latest?.weight ? `${latest.weight} kg` : "غير مسجل"}
+- آخر خصر: ${latest?.waist ? `${latest.waist} cm` : "غير مسجل"}
+- القياس السابق: ${previous ? `${previous.weight} kg، خصر ${previous.waist} cm بتاريخ ${previous.date}` : "غير متوفر"}
+
+المطلوب من التحليل:
+حلل الالتزام، اذكر أين النقص أو الزيادة، واقترح تعويضاً أسبوعياً عملياً للبروتين والسعرات والكارديو مع مراعاة خسارة الدهون والمحافظة على العضلات.`;
+}
+
+function exportBackup() {
+  const payload = {
+    app: "healthtrackker",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    state: stripStoredPhotos(state),
+  };
+  const raw = JSON.stringify(payload, null, 2);
+  writeStateBackup(JSON.stringify(payload.state));
+  const blob = new Blob([raw], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `healthtrackker-backup-${todayISO()}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function importBackup() {
+  const file = document.querySelector("#backupImportFile")?.files?.[0];
+  if (!file) {
+    alert("اختر ملف النسخة الاحتياطية أولاً.");
+    return;
+  }
+  try {
+    const parsed = JSON.parse(await file.text());
+    const snapshot = parsed.state || parsed;
+    const raw = JSON.stringify(snapshot);
+    const before = recoveryCandidates;
+    recoveryCandidates = [{ source: file.name, raw, snapshot, summary: snapshotSummary(snapshot) }];
+    mergeRecoveryCandidate(0);
+    recoveryCandidates = before;
+    render();
+  } catch {
+    alert("تعذر قراءة ملف النسخة الاحتياطية.");
+  }
+}
+
+async function copyAIReport() {
+  const report = generateAIReport();
+  const box = document.querySelector("#aiReportText");
+  if (box) box.value = report;
+  try {
+    await navigator.clipboard.writeText(report);
+    alert("تم نسخ التقرير.");
+  } catch {
+    const temp = document.createElement("textarea");
+    temp.value = report;
+    document.body.appendChild(temp);
+    temp.select();
+    document.execCommand("copy");
+    temp.remove();
+    alert("تم تجهيز التقرير للنسخ.");
+  }
 }
 
 function saveApiSettings(event) {
@@ -1668,6 +1913,7 @@ function isCommandButton(target) {
     "deleteProgress",
     "deleteCardio",
     "restoreSnapshot",
+    "setDate",
   ];
   return commandKeys.some((key) => target.dataset[key] !== undefined);
 }
@@ -1680,6 +1926,29 @@ function handleAction(target) {
   }
   if (action === "close-quick-add") {
     closeQuickAdd();
+    return;
+  }
+  if (action === "show-insight") {
+    activeDashboardInsight = target.dataset.insight || "consistency";
+    render();
+    requestAnimationFrame(() => document.querySelector("#dashboardInsight")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    return;
+  }
+  if (action === "close-insight") {
+    activeDashboardInsight = "";
+    render();
+    return;
+  }
+  if (action === "export-backup") {
+    exportBackup();
+    return;
+  }
+  if (action === "import-backup") {
+    importBackup();
+    return;
+  }
+  if (action === "copy-ai-report") {
+    copyAIReport();
     return;
   }
   if (action === "quick-cardio") {
@@ -1758,6 +2027,12 @@ function handleAction(target) {
   if (target.dataset.deleteProgress) state.progressLogs = state.progressLogs.filter((item) => item.id !== target.dataset.deleteProgress);
   if (target.dataset.deleteCardio) state.cardioLogs = state.cardioLogs.filter((item) => item.id !== target.dataset.deleteCardio);
   if (target.dataset.restoreSnapshot) mergeRecoveryCandidate(target.dataset.restoreSnapshot);
+  if (target.dataset.setDate) {
+    activeDate = target.dataset.setDate;
+    activeDateInput.value = activeDate;
+    setView("food-log");
+    return;
+  }
   if (action === "cancel-edit") editing.foodLog = null;
   if (action === "cancel-food-db") editing.food = null;
   if (action === "cancel-sauce-db") editing.sauce = null;

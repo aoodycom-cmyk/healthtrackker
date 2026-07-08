@@ -74,7 +74,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: 18px var(--space-2) 10px;
+  padding: 12px var(--space-2) 8px;
   background: linear-gradient(180deg, rgba(7, 7, 20, 0.96), rgba(7, 7, 20, 0.58));
   backdrop-filter: blur(22px);
 }
@@ -95,7 +95,7 @@ p {
 
 h1 {
   margin-bottom: 0;
-  font-size: 23px;
+  font-size: 21px;
   line-height: 1.12;
   font-weight: 900;
 }
@@ -120,7 +120,7 @@ h3 {
 .textarea {
   width: 100%;
   max-width: 100%;
-  min-height: 52px;
+  min-height: 48px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.07);
@@ -161,7 +161,7 @@ h3 {
 
 .view {
   display: none;
-  padding: 14px var(--space-2) var(--space-3);
+  padding: 10px var(--space-2) var(--space-3);
   animation: viewIn 260ms ease both;
 }
 
@@ -204,8 +204,8 @@ h3 {
 .hero-card {
   position: relative;
   overflow: hidden;
-  min-height: 286px;
-  padding: 20px;
+  min-height: 232px;
+  padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 34px;
   background:
@@ -214,6 +214,26 @@ h3 {
     linear-gradient(145deg, rgba(31, 41, 118, 0.96), rgba(15, 15, 42, 0.96) 62%),
     var(--card-strong);
   box-shadow: var(--shadow);
+}
+
+button.hero-card,
+button.macro-card,
+button.score-card,
+button.mini-card {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  appearance: none;
+}
+
+.insight-trigger {
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.insight-trigger:hover {
+  transform: translateY(-2px);
+  border-color: rgba(52, 211, 153, 0.45);
 }
 
 .hero-card::before {
@@ -251,13 +271,13 @@ h3 {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin: 16px 0 12px;
+  margin: 10px 0 10px;
   direction: ltr;
   justify-content: flex-end;
 }
 
 .hero-value strong {
-  font-size: clamp(50px, 17vw, 76px);
+  font-size: clamp(42px, 12vw, 58px);
   line-height: 0.95;
   font-weight: 950;
   font-variant-numeric: tabular-nums;
@@ -265,7 +285,7 @@ h3 {
 
 .hero-value span {
   color: var(--soft);
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 850;
 }
 
@@ -273,7 +293,7 @@ h3 {
 .progress-track {
   position: relative;
   overflow: hidden;
-  height: 11px;
+  height: 9px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
 }
@@ -296,11 +316,11 @@ h3 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .hero-meta div {
-  padding: 12px;
+  padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.07);
@@ -316,7 +336,7 @@ h3 {
 .hero-meta strong {
   display: block;
   margin-top: 6px;
-  font-size: 21px;
+  font-size: 18px;
   font-weight: 950;
   font-variant-numeric: tabular-nums;
 }
@@ -324,8 +344,8 @@ h3 {
 .energy-glow {
   position: absolute;
   inset: auto 22px 18px auto;
-  width: 110px;
-  height: 110px;
+  width: 86px;
+  height: 86px;
   border-radius: 999px;
   background: radial-gradient(circle, rgba(36, 242, 133, 0.38), transparent 68%);
   filter: blur(2px);
@@ -335,8 +355,8 @@ h3 {
 .hero-motivation {
   position: relative;
   z-index: 1;
-  margin: 18px 0 -4px;
-  font-size: 26px;
+  margin: 10px 0 -2px;
+  font-size: 22px;
   background: linear-gradient(90deg, #fff, #8be9ff 48%, #ffd1a6);
   -webkit-background-clip: text;
   color: transparent;
@@ -400,8 +420,8 @@ h3 {
 }
 
 .ring {
-  width: 82px;
-  height: 82px;
+  width: 66px;
+  height: 66px;
   transform: rotate(-90deg);
 }
 
@@ -425,8 +445,8 @@ h3 {
 .macro-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 14px;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .macro-card,
@@ -442,8 +462,8 @@ h3 {
 }
 
 .macro-card {
-  min-height: 146px;
-  padding: 14px;
+  min-height: 112px;
+  padding: 12px;
 }
 
 .macro-head {
@@ -451,15 +471,15 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .icon-bubble {
   display: inline-grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 16px;
+  width: 34px;
+  height: 34px;
+  border-radius: 14px;
   color: var(--icon-color, var(--primary-2));
   background: color-mix(in srgb, var(--icon-color, var(--primary-2)) 17%, transparent);
 }
@@ -473,8 +493,8 @@ h3 {
 }
 
 .macro-value {
-  margin: 0 0 10px;
-  font-size: 22px;
+  margin: 0 0 8px;
+  font-size: 19px;
   line-height: 1;
   font-weight: 950;
   font-variant-numeric: tabular-nums;
@@ -493,7 +513,7 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 8px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 850;
@@ -842,6 +862,60 @@ h3 {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.6;
+}
+
+.insight-summary {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.insight-days .insight-day.good {
+  border-color: rgba(34, 197, 94, 0.28);
+}
+
+.insight-days .insight-day.warn {
+  border-color: rgba(245, 158, 11, 0.28);
+}
+
+.meal-groups {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.meal-group {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 12px;
+}
+
+.meal-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.meal-group-title h3 {
+  margin: 0;
+}
+
+.meal-group-list {
+  margin-top: 10px;
+}
+
+.empty-slot {
+  opacity: 0.7;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.report-box {
+  min-height: 360px;
+  direction: rtl;
+  white-space: pre-wrap;
 }
 
 .alert-list {
@@ -1342,8 +1416,8 @@ h3 {
 
   .dashboard-layout {
     display: grid;
-    grid-template-columns: 1.05fr 0.95fr;
-    gap: 18px;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
     align-items: start;
   }
 
@@ -1365,6 +1439,10 @@ h3 {
 
   .chart-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .insight-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .bottom-nav {
