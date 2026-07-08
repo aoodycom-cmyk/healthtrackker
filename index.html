@@ -8,9 +8,28 @@
     <meta name="apple-mobile-web-app-title" content="Fat Loss Coach" />
     <title>متابعة إنقاص الدهون</title>
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=dashboard-ux-1" />
+    <link rel="stylesheet" href="./styles.css?v=emergency-export-1" />
+    <style>
+      .emergency-export {
+        position: fixed;
+        top: max(10px, env(safe-area-inset-top));
+        left: 12px;
+        z-index: 20;
+        min-height: 42px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 999px;
+        padding: 9px 13px;
+        background: linear-gradient(135deg, #00e5ff, #22c55e);
+        color: #06111b;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 950;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+      }
+    </style>
   </head>
   <body>
+    <button id="emergencyExportBtn" class="emergency-export" type="button">تصدير بياناتي</button>
     <div class="app-shell">
       <header class="topbar">
         <div>
@@ -99,6 +118,110 @@
     <script src="./services/barcode.service.js"></script>
     <script src="./services/openai.service.js"></script>
     <script>
+      (function setupEmergencyExport() {
+        const STORAGE_KEY = "fatLossDashboard.v1";
+        const SETTINGS_KEY = "fatLossDashboard.settings.v1";
+        const BACKUP_KEY = "fatLossDashboard.backups.v1";
+        const button = document.getElementById("emergencyExportBtn");
+
+        function safeParse(raw) {
+          try {
+            return raw ? JSON.parse(raw) : null;
+          } catch {
+            return null;
+          }
+        }
+
+        function countItems(state, key) {
+          return Array.isArray(state?.[key]) ? state[key].length : 0;
+        }
+
+        function buildEmergencyPayload() {
+          const state = safeParse(localStorage.getItem(STORAGE_KEY));
+          const settings = safeParse(localStorage.getItem(SETTINGS_KEY));
+          const backups = safeParse(localStorage.getItem(BACKUP_KEY));
+          const rawLocalStorage = {};
+          for (let index = 0; index < localStorage.length; index += 1) {
+            const key = localStorage.key(index);
+            if (key && key.includes("fatLossDashboard")) rawLocalStorage[key] = localStorage.getItem(key);
+          }
+          return {
+            app: "healthtrackker",
+            exportType: "emergency-home-screen-export",
+            exportedAt: new Date().toISOString(),
+            origin: location.origin,
+            counts: {
+              foods: countItems(state, "foods"),
+              sauces: countItems(state, "sauces"),
+              meals: countItems(state, "meals"),
+              foodLogs: countItems(state, "foodLogs"),
+              cardioLogs: countItems(state, "cardioLogs"),
+              progressLogs: countItems(state, "progressLogs"),
+              savedDays: countItems(state, "savedDays")
+            },
+            state,
+            settings,
+            backups,
+            rawLocalStorage
+          };
+        }
+
+        function downloadText(filename, text) {
+          const blob = new Blob([text], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(url);
+        }
+
+        async function copyText(text) {
+          try {
+            await navigator.clipboard.writeText(text);
+            alert("تم نسخ بياناتك. أرسلها الآن.");
+          } catch {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            document.execCommand("copy");
+            textarea.remove();
+            alert("تم تجهيز بياناتك للنسخ.");
+          }
+        }
+
+        button?.addEventListener("click", async () => {
+          const payload = buildEmergencyPayload();
+          const total = payload.counts.foodLogs + payload.counts.cardioLogs + payload.counts.progressLogs + payload.counts.meals;
+          const text = JSON.stringify(payload, null, 2);
+          const filename = `healthtrackker-emergency-${new Date().toISOString().slice(0, 10)}.json`;
+
+          if (!payload.state || total === 0) {
+            alert("هذا المكان لا يحتوي بيانات محفوظة. افتح الزر من أيقونة التطبيق التي تظهر فيها بياناتك.");
+            return;
+          }
+
+          const file = new File([text], filename, { type: "application/json" });
+          if (navigator.canShare?.({ files: [file] })) {
+            try {
+              await navigator.share({ title: "Healthtrackker backup", text: "نسخة بيانات Healthtrackker", files: [file] });
+              return;
+            } catch {}
+          }
+
+          try {
+            downloadText(filename, text);
+          } catch {
+            await copyText(text);
+          }
+        });
+      })();
+    </script>
+    <script>
       Promise.all([
         "serviceWorker" in navigator
           ? navigator.serviceWorker.getRegistrations().then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
@@ -113,6 +236,6 @@
         }
       }).catch(() => {});
     </script>
-    <script src="./app.js?v=dashboard-ux-1"></script>
+    <script src="./app.js?v=emergency-export-1"></script>
   </body>
 </html>
