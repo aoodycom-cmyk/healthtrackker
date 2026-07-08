@@ -184,6 +184,36 @@ function mergeRecoveryCandidate(index) {
   alert("تم دمج النسخة التي وجدتها داخل المتصفح. راجع صفحة اليوم والتقدم.");
 }
 
+function normalizeImportedState(snapshot) {
+  const next = { ...snapshot, settings: normalizeSettings(snapshot?.settings) };
+  stateCollections.forEach((key) => {
+    const incoming = Array.isArray(snapshot?.[key]) ? snapshot[key] : [];
+    next[key] = incoming.map((item) => {
+      const entry = { ...item };
+      if (!entry.id) entry.id = crypto.randomUUID();
+      return entry;
+    });
+  });
+  return stripStoredPhotos(next);
+}
+
+function replaceStateFromSnapshot(snapshot, source = "الملف") {
+  const next = normalizeImportedState(snapshot);
+  if (meaningfulDataCount(next) === 0) {
+    alert("الملف لا يحتوي على بيانات كافية للاستبدال.");
+    return;
+  }
+  const ok = confirm(`سيتم استبدال بيانات هذا المتصفح ببيانات ${source}. سيتم حفظ الوضع الحالي كنسخة أمان أولاً.`);
+  if (!ok) return;
+  writeStateBackup(localStorage.getItem(STORAGE_KEY));
+  state = next;
+  saveSettingsOnly(state.settings);
+  saveState();
+  recoveryCandidates = discoverRecoveryCandidates();
+  alert("تم استبدال البيانات بنجاح. افتح الرئيسية أو اليوم للتأكد من الأرقام.");
+  render();
+}
+
 function stripStoredPhotos(nextState) {
   return {
     ...nextState,
@@ -1562,7 +1592,7 @@ function recoveryTools() {
   ` : `<p class="compact-note">لا توجد نسخة قديمة قابلة للدمج داخل هذا المتصفح حالياً.</p>`;
   return `
     <div class="subform">
-      <p class="compact-note">احتفظ بنسخة واحدة خارج المتصفح. التصدير يحفظ ملفاً يمكنك سحبه والاحتفاظ به، والاستيراد يدمج البيانات ولا يحذف الموجود.</p>
+      <p class="compact-note">احتفظ بنسخة واحدة خارج المتصفح. الدمج لا يحذف الموجود، والاستبدال الكامل يجعل هذا المتصفح مطابقاً للملف بعد حفظ نسخة أمان أولاً.</p>
       <div class="actions">
         <button class="btn" type="button" data-action="export-backup">تصدير نسخة احتياطية</button>
       </div>
@@ -1572,6 +1602,7 @@ function recoveryTools() {
       </div>
       <div class="actions">
         <button class="btn secondary" type="button" data-action="import-backup">استيراد ودمج</button>
+        <button class="btn danger" type="button" data-action="replace-backup">استبدال كامل من الملف</button>
       </div>
       ${candidateList}
     </div>
@@ -1689,6 +1720,21 @@ async function importBackup() {
     mergeRecoveryCandidate(0);
     recoveryCandidates = before;
     render();
+  } catch {
+    alert("تعذر قراءة ملف النسخة الاحتياطية.");
+  }
+}
+
+async function replaceBackup() {
+  const file = document.querySelector("#backupImportFile")?.files?.[0];
+  if (!file) {
+    alert("اختر ملف النسخة الاحتياطية أولاً.");
+    return;
+  }
+  try {
+    const parsed = JSON.parse(await file.text());
+    const snapshot = parsed.state || parsed;
+    replaceStateFromSnapshot(snapshot, file.name);
   } catch {
     alert("تعذر قراءة ملف النسخة الاحتياطية.");
   }
@@ -1945,6 +1991,10 @@ function handleAction(target) {
   }
   if (action === "import-backup") {
     importBackup();
+    return;
+  }
+  if (action === "replace-backup") {
+    replaceBackup();
     return;
   }
   if (action === "copy-ai-report") {
