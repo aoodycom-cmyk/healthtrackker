@@ -1,26 +1,26 @@
 :root {
   color-scheme: dark;
-  --bg: #070714;
-  --surface: #111126;
-  --surface-2: #171735;
-  --surface-3: #20204a;
-  --card: rgba(18, 20, 48, 0.72);
-  --card-strong: rgba(20, 22, 56, 0.88);
+  --bg: #07100f;
+  --surface: #101722;
+  --surface-2: #17202c;
+  --surface-3: #20303a;
+  --card: rgba(18, 24, 34, 0.78);
+  --card-strong: rgba(18, 25, 38, 0.92);
   --ink: #f8fbff;
   --muted: #a9b4cc;
   --soft: #d7def2;
   --line: rgba(255, 255, 255, 0.12);
-  --primary: #00e5ff;
-  --primary-2: #22c55e;
-  --accent: #3b82f6;
-  --violet: #a855f7;
-  --amber: #ff7a1a;
+  --primary: #48e2d6;
+  --primary-2: #36d27f;
+  --accent: #7bb7ff;
+  --violet: #c084fc;
+  --amber: #ff9f45;
   --red: #ff3b6b;
   --good: #24f285;
   --info: #38bdf8;
   --shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
-  --radius: 28px;
-  --radius-sm: 18px;
+  --radius: 18px;
+  --radius-sm: 14px;
   --space-1: 8px;
   --space-2: 16px;
   --space-3: 24px;
@@ -39,10 +39,9 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at 12% 2%, rgba(0, 229, 255, 0.32), transparent 30%),
-    radial-gradient(circle at 88% 8%, rgba(168, 85, 247, 0.28), transparent 28%),
-    radial-gradient(circle at 72% 44%, rgba(255, 122, 26, 0.15), transparent 32%),
-    linear-gradient(180deg, #070714 0%, #10102b 52%, #080817 100%);
+    linear-gradient(135deg, rgba(72, 226, 214, 0.18) 0%, transparent 34%),
+    linear-gradient(225deg, rgba(255, 159, 69, 0.13) 0%, transparent 38%),
+    linear-gradient(180deg, #07100f 0%, #101824 46%, #0b0d18 100%);
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
   letter-spacing: 0;
@@ -864,6 +863,354 @@ button.mini-card {
   line-height: 1.6;
 }
 
+.daily-command,
+.today-command,
+.insight-command {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(72, 226, 214, 0.16), rgba(255, 159, 69, 0.08)),
+    rgba(16, 23, 34, 0.86);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
+}
+
+.daily-command {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.daily-command::after,
+.today-command::after,
+.insight-command::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  transform: translateX(68%);
+}
+
+.daily-command.good,
+.insight-command.protein {
+  background:
+    linear-gradient(135deg, rgba(54, 210, 127, 0.18), rgba(72, 226, 214, 0.09)),
+    rgba(16, 23, 34, 0.88);
+}
+
+.daily-command.warn,
+.insight-command.fat {
+  background:
+    linear-gradient(135deg, rgba(255, 159, 69, 0.2), rgba(192, 132, 252, 0.1)),
+    rgba(16, 23, 34, 0.88);
+}
+
+.daily-command.bad {
+  background:
+    linear-gradient(135deg, rgba(255, 59, 107, 0.18), rgba(255, 159, 69, 0.1)),
+    rgba(16, 23, 34, 0.9);
+}
+
+.command-copy h2,
+.today-command h3,
+.insight-command h3 {
+  margin: 4px 0 6px;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.command-copy p,
+.today-command p,
+.insight-command p {
+  margin: 0;
+  color: var(--soft);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.command-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.command-button {
+  min-height: 46px;
+  border: 0;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  color: #06110f;
+  font-weight: 950;
+}
+
+.command-button.secondary {
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+
+.command-stats,
+.today-command-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.command-stats span,
+.today-command-grid span {
+  display: grid;
+  gap: 3px;
+  min-height: 54px;
+  align-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.command-stats strong,
+.today-command-grid strong {
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tap-hint {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 1;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.hero-card,
+.macro-card,
+.panel,
+.list-item,
+.mini-card,
+.chart-card,
+.score-card,
+.coach-card,
+.meal-group {
+  border-radius: 18px;
+}
+
+.hero-card {
+  min-height: 214px;
+  background:
+    linear-gradient(135deg, rgba(123, 183, 255, 0.24), rgba(255, 159, 69, 0.12)),
+    linear-gradient(180deg, rgba(20, 29, 45, 0.96), rgba(13, 18, 29, 0.96));
+}
+
+.hero-card::before {
+  display: none;
+}
+
+.hero-motivation {
+  color: var(--ink);
+  background: none;
+}
+
+.macro-card {
+  position: relative;
+  min-height: 116px;
+  outline: 1px solid transparent;
+}
+
+.macro-card::after,
+.mini-card.insight-trigger::after,
+.score-card::after {
+  content: "↗";
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.macro-card:hover,
+.score-card:hover,
+.mini-card.insight-trigger:hover {
+  outline-color: rgba(72, 226, 214, 0.32);
+}
+
+.macro-foot span:last-child {
+  color: var(--primary);
+}
+
+.coach-card {
+  background:
+    linear-gradient(135deg, rgba(72, 226, 214, 0.12), rgba(255, 255, 255, 0.04)),
+    rgba(16, 23, 34, 0.84);
+}
+
+.score-strip {
+  gap: 10px;
+}
+
+.score-card {
+  min-height: 96px;
+}
+
+.insight-command {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+  padding: 15px;
+}
+
+.insight-command strong {
+  color: #d7fff0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.insight-panel {
+  scroll-margin-top: 92px;
+}
+
+.insight-summary .metric-card {
+  min-height: 118px;
+  border-radius: 16px;
+}
+
+.today-command {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.entry-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.entry-head h3 {
+  margin: 3px 0 0;
+}
+
+.meal-main-grid,
+.cardio-main-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.optional-entry {
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.optional-entry summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  color: var(--soft);
+  font-size: 13px;
+  font-weight: 900;
+  list-style: none;
+}
+
+.optional-entry summary::-webkit-details-marker {
+  display: none;
+}
+
+.optional-entry summary::after {
+  content: "+";
+  float: left;
+  color: var(--primary-2);
+}
+
+.optional-entry[open] summary::after {
+  content: "-";
+}
+
+.optional-entry .field-grid {
+  padding: 0 12px 12px;
+}
+
+.food-preview-card {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  border: 1px solid rgba(72, 226, 214, 0.2);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(72, 226, 214, 0.08);
+}
+
+.food-preview-card > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.food-preview-card > strong {
+  font-size: 27px;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.food-preview-card div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.food-preview-card b {
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--soft);
+  font-size: 12px;
+}
+
+.meal-group {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.details-card {
+  padding: 0;
+}
+
+.details-card summary {
+  min-height: 58px;
+  padding: 17px 18px;
+}
+
+.details-card[open] {
+  padding-bottom: 16px;
+}
+
+.details-card > .subform,
+.details-card > form,
+.details-card > .list,
+.details-card > input {
+  margin-right: 16px;
+  margin-left: 16px;
+}
+
 .insight-summary {
   display: grid;
   grid-template-columns: 1fr;
@@ -1419,6 +1766,28 @@ button.mini-card {
     grid-template-columns: 1fr 1fr;
     gap: 14px;
     align-items: start;
+  }
+
+  .daily-command {
+    grid-template-columns: minmax(0, 1.3fr) minmax(220px, 0.7fr);
+    align-items: center;
+  }
+
+  .command-stats {
+    grid-column: 1 / -1;
+  }
+
+  .today-command {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.75fr);
+    align-items: center;
+  }
+
+  .meal-main-grid {
+    grid-template-columns: 0.8fr 1.4fr 0.7fr;
+  }
+
+  .cardio-main-grid {
+    grid-template-columns: 1.3fr 0.8fr 0.8fr;
   }
 
   .macro-grid {

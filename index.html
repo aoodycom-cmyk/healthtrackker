@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Fat Loss Coach" />
     <title>متابعة إنقاص الدهون</title>
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=safe-replace-import-1" />
+    <link rel="stylesheet" href="./styles.css?v=ux-refresh-1" />
     <style>
       .emergency-export {
         position: fixed;
@@ -17,19 +17,20 @@
         z-index: 20;
         min-height: 42px;
         border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 999px;
-        padding: 9px 13px;
-        background: linear-gradient(135deg, #00e5ff, #22c55e);
-        color: #06111b;
+        border-radius: 14px;
+        padding: 8px 10px;
+        background: rgba(8, 13, 26, 0.82);
+        color: #e8fff4;
         font: inherit;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 950;
-        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(18px);
       }
     </style>
   </head>
   <body>
-    <button id="emergencyExportBtn" class="emergency-export" type="button">تصدير بياناتي</button>
+    <button id="emergencyExportBtn" class="emergency-export" type="button">نسخة بيانات</button>
     <div class="app-shell">
       <header class="topbar">
         <div>
@@ -72,8 +73,8 @@
       <div class="sheet-handle"></div>
       <div class="sheet-head">
         <div>
-          <p class="eyebrow">Quick Add</p>
-          <h2>أضف وجبتك بسرعة</h2>
+          <p class="eyebrow">إضافة سريعة</p>
+          <h2>سجل وجبة</h2>
         </div>
         <button class="btn icon secondary" type="button" data-action="close-quick-add" title="إغلاق">×</button>
       </div>
@@ -93,14 +94,14 @@
           </div>
         </div>
         <div class="field">
-          <label>صوص g</label>
+            <label>جرامات الصوص</label>
           <input class="input" name="sauceGrams" type="number" min="0" step="1" value="0" />
         </div>
         <div class="quick-preview" id="quickPreview"></div>
-        <button class="btn sheet-primary" type="submit">تم، أضف الوجبة</button>
+        <button class="btn sheet-primary" type="submit">إضافة الوجبة</button>
       </form>
       <div class="sheet-shortcuts">
-        <button class="btn secondary" type="button" data-action="quick-food-search">USDA / Barcode</button>
+        <button class="btn secondary" type="button" data-action="quick-food-search">بحث / باركود</button>
         <button class="btn secondary" type="button" data-action="quick-cardio">كارديو</button>
         <button class="btn secondary" type="button" data-action="quick-weight">وزن</button>
       </div>
@@ -236,6 +237,6 @@
         }
       }).catch(() => {});
     </script>
-    <script src="./app.js?v=safe-replace-import-1"></script>
+    <script src="./app.js?v=ux-refresh-1"></script>
   </body>
 </html>

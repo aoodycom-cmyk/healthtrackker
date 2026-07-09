@@ -436,7 +436,7 @@ function updateQuickPreview() {
   }
   const [sourceType, itemId] = data.source.split(":");
   const macros = entryMacros({ sourceType, itemId, grams: data.grams, sauceId: data.sauceId, sauceGrams: data.sauceGrams });
-  preview.innerHTML = `<strong>${formatNumber(macros.calories)} cal</strong><span>P ${formatNumber(macros.protein)}g · C ${formatNumber(macros.carbs)}g · F ${formatNumber(macros.fat)}g</span>`;
+  preview.innerHTML = `<strong>${formatNumber(macros.calories)} سعرة</strong><span>${formatNumber(macros.protein)}g بروتين · ${formatNumber(macros.carbs)}g كارب · ${formatNumber(macros.fat)}g دهون</span>`;
 }
 
 function saveQuickFood(event) {
@@ -453,7 +453,7 @@ function saveQuickFood(event) {
     grams: Number(data.grams),
     sauceId: data.sauceId,
     sauceGrams: Number(data.sauceGrams),
-    notes: "Quick Add",
+    notes: "إضافة سريعة",
   });
   closeQuickAdd();
   render();
@@ -504,11 +504,61 @@ function signed(value, digits = 1) {
 }
 
 function dashboardStatus(food) {
-  if (food.calories === 0) return { type: "info", label: "Start Strong", text: "ابدأ بأول وجبة وخذ القرار بسرعة.", headline: "Keep Going" };
-  if (food.calories > state.settings.targetCalories) return { type: "bad", label: "Over Target", text: "خفف الوجبة القادمة أو أضف كارديو خفيف.", headline: "Adjust Now" };
-  if (food.protein < state.settings.minProtein && food.calories > state.settings.targetCalories * 0.55) return { type: "warn", label: "Need Protein", text: "السعرات جيدة، لكن البروتين يحتاج دفعة.", headline: "Need More Protein" };
-  if (state.settings.targetCalories - food.calories < 180) return { type: "warn", label: "Almost There", text: "أنت قريب جداً. اختر آخر وجبة بذكاء.", headline: "On Track" };
-  return { type: "good", label: "Excellent Day", text: "الأرقام ممتازة. استمر بنفس الإيقاع.", headline: "Excellent Day" };
+  if (food.calories === 0) return { type: "info", label: "ابدأ اليوم", text: "سجل أول وجبة بروتين عالي، بعدها يتضح مسار اليوم.", headline: "جاهز للبداية" };
+  if (food.calories > state.settings.targetCalories) return { type: "bad", label: "تحتاج ضبط", text: "خفف الوجبة القادمة أو أضف كارديو حتى ترجع ضمن الخطة.", headline: "راجع السعرات" };
+  if (food.protein < state.settings.minProtein && food.calories > state.settings.targetCalories * 0.55) return { type: "warn", label: "ادعم البروتين", text: "السعرات جيدة، لكن البروتين يحتاج دفعة قبل نهاية اليوم.", headline: "بروتين ناقص" };
+  if (state.settings.targetCalories - food.calories < 180) return { type: "warn", label: "قريب من الهدف", text: "أنت قريب جداً. اجعل آخر اختيار صغير وواضح.", headline: "امش بحذر" };
+  return { type: "good", label: "ممتاز", text: "السعرات تحت السيطرة والبروتين قريب من الخطة.", headline: "يوم متوازن" };
+}
+
+function dailyDecision(food, cardio) {
+  const remainingCalories = state.settings.targetCalories - food.calories;
+  const proteinLeft = Math.max(0, state.settings.proteinGoal - food.protein);
+  const minProteinLeft = Math.max(0, state.settings.minProtein - food.protein);
+  const cardioLeft = Math.max(0, (state.settings.weeklyCardioGoal / 7) - cardio);
+  if (food.calories === 0) {
+    return {
+      tone: "info",
+      title: "ابدأ بوجبة بروتين واضحة",
+      text: `هدف اليوم ${formatNumber(state.settings.targetCalories)} سعرة. الأفضل تبدأ بـ ${formatNumber(Math.min(60, state.settings.proteinGoal / 3))}g بروتين حتى لا تتراكم عليك آخر اليوم.`,
+      primary: "سجل أول وجبة",
+      secondary: "أضف كارديو",
+    };
+  }
+  if (remainingCalories < 0) {
+    return {
+      tone: "bad",
+      title: `زائد ${formatNumber(Math.abs(remainingCalories))} سعرة`,
+      text: `عالجها بكارديو أو خفف الوجبة القادمة. البروتين المتبقي ${formatNumber(proteinLeft)}g.`,
+      primary: "افتح تفاصيل السعرات",
+      secondary: "سجل كارديو",
+    };
+  }
+  if (minProteinLeft > 0) {
+    return {
+      tone: "warn",
+      title: `ناقصك ${formatNumber(minProteinLeft)}g بروتين`,
+      text: `عندك ${formatNumber(remainingCalories)} سعرة متاحة. اختر بروتين عالي قبل إضافة كارب أو دهون.`,
+      primary: "أضف وجبة بروتين",
+      secondary: "تفاصيل البروتين",
+    };
+  }
+  if (cardioLeft > 0 && food.calories > state.settings.targetCalories * 0.75) {
+    return {
+      tone: "info",
+      title: `باقي ${formatNumber(cardioLeft)} سعرة كارديو`,
+      text: "الغذاء مضبوط تقريباً. جلسة قصيرة تثبت العجز الأسبوعي.",
+      primary: "سجل كارديو",
+      secondary: "راجع الأسبوع",
+    };
+  }
+  return {
+    tone: "good",
+    title: "اليوم تحت السيطرة",
+    text: `متبقي ${formatNumber(remainingCalories)} سعرة. حافظ على الاختيارات النظيفة لباقي اليوم.`,
+    primary: "أضف وجبة",
+    secondary: "راجع الالتزام",
+  };
 }
 
 function progressBar(value, className = "") {
@@ -528,22 +578,43 @@ function renderDashboard() {
   const food = dayFood();
   const cardio = dayCardio();
   const dailyDeficit = dayDeficit();
-  const week = weekStats();
   const remaining = state.settings.targetCalories - food.calories;
   const status = dashboardStatus(food);
+  const decision = dailyDecision(food, cardio);
   const calorieProgress = percent(food.calories, state.settings.targetCalories);
   const latest = latestProgressDelta();
   const scores = dailyScores();
   const coach = coachMessage();
   const streak = adherenceStreak();
+  const proteinLeft = Math.max(0, state.settings.proteinGoal - food.protein);
+  const fatRoom = Math.max(0, state.settings.maxFat - food.fat);
+  const cardioGoal = Math.max(state.settings.weeklyCardioGoal / 7, 1);
+  const cardioLeft = Math.max(0, cardioGoal - cardio);
 
   document.querySelector("#dashboard").innerHTML = `
+    <section class="daily-command ${decision.tone}">
+      <div class="command-copy">
+        <span class="hero-label">قرار اليوم</span>
+        <h2>${decision.title}</h2>
+        <p>${decision.text}</p>
+      </div>
+      <div class="command-actions">
+        <button class="command-button" type="button" data-view="food-log">${decision.primary}</button>
+        <button class="command-button secondary" type="button" data-action="${decision.secondary.includes("كارديو") ? "focus-cardio" : "show-insight"}" data-insight="${decision.secondary.includes("البروتين") ? "protein" : "consistency"}">${decision.secondary}</button>
+      </div>
+      <div class="command-stats">
+        <span><strong>${formatNumber(Math.max(0, remaining))}</strong> سعرة متاحة</span>
+        <span><strong>${formatNumber(proteinLeft)}</strong>g بروتين باقي</span>
+        <span><strong>${formatNumber(cardioLeft)}</strong> كارديو باقي</span>
+      </div>
+    </section>
+
     <div class="dashboard-layout">
       <button class="hero-card insight-trigger" type="button" data-action="show-insight" data-insight="calories">
         <div class="energy-glow"></div>
         <div class="hero-top">
           <div>
-            <span class="hero-label">السعرات اليوم</span>
+            <span class="hero-label">استهلاك اليوم</span>
             <span class="status-badge ${status.type}">${status.label}</span>
           </div>
           <div class="hero-ring-wrap">
@@ -562,13 +633,14 @@ function renderDashboard() {
           <div><small>تبقى</small><strong>${formatNumber(remaining)} سعرة</strong></div>
           <div><small>العجز اليوم</small><strong>${formatNumber(dailyDeficit)}</strong></div>
         </div>
+        <span class="tap-hint">اضغط للتفاصيل</span>
       </button>
 
       <section class="macro-grid" aria-label="الماكروز">
-        ${macroCard("protein", "Protein", food.protein, state.settings.proteinGoal, "g", "protein")}
-        ${macroCard("carbs", "Carbs", food.carbs, state.settings.carbsGoal, "g", "carbs")}
-        ${macroCard("fat", "Fat", food.fat, state.settings.fatGoal, "g", "fat")}
-        ${macroCard("cardio", "Cardio", cardio, Math.max(state.settings.weeklyCardioGoal / 7, 1), "cal", "cardio")}
+        ${macroCard("protein", "البروتين", food.protein, state.settings.proteinGoal, "g", "protein", `باقي ${formatNumber(proteinLeft)}g`)}
+        ${macroCard("carbs", "الكارب", food.carbs, state.settings.carbsGoal, "g", "carbs", `هدف ${formatNumber(state.settings.carbsGoal)}g`)}
+        ${macroCard("fat", "الدهون", food.fat, state.settings.fatGoal, "g", "fat", `متاح ${formatNumber(fatRoom)}g`)}
+        ${macroCard("cardio", "الكارديو", cardio, cardioGoal, "cal", "cardio", `باقي ${formatNumber(cardioLeft)}`)}
       </section>
     </div>
     ${activeDashboardInsight ? renderComplianceInsight(activeDashboardInsight) : ""}
@@ -583,9 +655,9 @@ function renderDashboard() {
     </section>
 
     <section class="score-strip">
-      ${scoreCard("Streak", `${streak} يوم`, "flame", "orange")}
-      ${scoreCard("Nutrition", `${scores.nutrition}%`, "target", "blue")}
-      ${scoreCard("Consistency", `${scores.consistency}%`, "spark", "purple")}
+      ${scoreCard("السلسلة", `${streak} يوم`, "flame", "orange", "consistency")}
+      ${scoreCard("التغذية", `${scores.nutrition}%`, "target", "blue", "nutrition")}
+      ${scoreCard("الالتزام", `${scores.consistency}%`, "spark", "purple", "consistency")}
     </section>
 
     <div class="section-title"><h2>التقدم</h2><span class="pill info">آخر قياس</span></div>
@@ -605,7 +677,7 @@ function renderDashboard() {
   drawDashboardCharts();
 }
 
-function macroCard(iconName, label, actual, goal, unit, className) {
+function macroCard(iconName, label, actual, goal, unit, className, footNote = "") {
   const value = percent(actual, goal);
   return `
     <button class="macro-card insight-trigger" type="button" data-action="show-insight" data-insight="${className}">
@@ -616,7 +688,7 @@ function macroCard(iconName, label, actual, goal, unit, className) {
       <span class="metric-label">${label}</span>
       <p class="macro-value">${formatNumber(actual)} <span>/ ${formatNumber(goal)} ${unit}</span></p>
       ${progressBar(value, className)}
-      <div class="macro-foot"><span>الهدف</span><span>${formatNumber(goal)} ${unit}</span></div>
+      <div class="macro-foot"><span>${footNote || "الهدف"}</span><span>اضغط</span></div>
     </button>
   `;
 }
@@ -646,9 +718,9 @@ function progressMini(iconName, label, value, unit, delta, lowerIsGood = false) 
   `;
 }
 
-function scoreCard(label, value, iconName, tone) {
+function scoreCard(label, value, iconName, tone, insight = "consistency") {
   return `
-    <button class="score-card ${tone} insight-trigger" type="button" data-action="show-insight" data-insight="${label === "Streak" ? "consistency" : label.toLowerCase()}">
+    <button class="score-card ${tone} insight-trigger" type="button" data-action="show-insight" data-insight="${insight}">
       <span class="icon-bubble">${icon(iconName)}</span>
       <small>${label}</small>
       <strong>${value}</strong>
@@ -693,7 +765,7 @@ function coachMessage() {
     return { title: "ابدأ بقوة", text: "سجل أول وجبة. الأفضل اليوم: بروتين عالي وسعرات واضحة من البداية." };
   }
   if (food.protein < state.settings.minProtein) {
-    return { title: "Need More Protein", text: `أضف تقريباً ${formatNumber(state.settings.minProtein - food.protein)}g بروتين قبل نهاية اليوم.` };
+    return { title: "ارفع البروتين", text: `أضف تقريباً ${formatNumber(state.settings.minProtein - food.protein)}g بروتين قبل نهاية اليوم.` };
   }
   if (food.fat > state.settings.maxFat) {
     return { title: "الدهون مرتفعة", text: "اختياراتك القادمة تكون بروتين وكارب نظيف، بدون صوصات دسمة." };
@@ -701,7 +773,7 @@ function coachMessage() {
   if (latest && previous && latest.weight > previous.weight && latest.waist < previous.waist) {
     return { title: "تقدم ذكي", text: "الوزن ارتفع قليلاً لكن الخصر ينخفض. هذا غالباً احتباس ماء وليس تراجعاً." };
   }
-  return { title: "On Track", text: "البروتين جيد، السعرات تحت السيطرة، والعجز اليومي يدعم هدف خسارة الدهون." };
+  return { title: "على المسار", text: "البروتين جيد، السعرات تحت السيطرة، والعجز اليومي يدعم هدف خسارة الدهون." };
 }
 
 function drawDashboardCharts() {
@@ -737,7 +809,7 @@ function renderWeeklySummary() {
   const week = weekStats();
   const averageCalories = week.actualCalories / 7;
   return `
-    <div class="section-title"><h2>Weekly Summary</h2><span class="pill good">${formatNumber(week.deficit)} عجز</span></div>
+    <div class="section-title"><h2>ملخص الأسبوع</h2><span class="pill good">${formatNumber(week.deficit)} عجز</span></div>
     <section class="weekly-strip">
       ${weeklyMini("العجز الأسبوعي", formatNumber(week.deficit), "سعرة", "calories")}
       ${weeklyMini("متوسط السعرات", formatNumber(averageCalories), "يومياً", "calories")}
@@ -769,6 +841,50 @@ function dayInsight(dateISO) {
   return { dateISO, food, cardio, logged, ok, calorieDelta, proteinDelta, fatDelta, issues };
 }
 
+function insightVerdict(type, balances, rows) {
+  const missedDays = rows.filter((row) => !row.logged).length;
+  const badDays = rows.filter((row) => row.logged && !row.ok).length;
+  const maps = {
+    calories: {
+      title: balances.calorieBalance >= 0 ? "السعرات تحت السيطرة" : `تحتاج تعويض ${formatNumber(Math.abs(balances.calorieBalance))} سعرة`,
+      text: balances.calorieBalance >= 0
+        ? "عندك مساحة أسبوعية. استخدمها بذكاء ولا تحولها لوجبة مفتوحة."
+        : `قسم التعويض على الأيام المتبقية: ${formatNumber(Math.abs(balances.calorieBalance) / balances.remainingDays)} سعرة يومياً أو كارديو.`,
+      action: "افتح اليوم وعدل الوجبة الأقرب.",
+    },
+    protein: {
+      title: balances.proteinBalance >= 0 ? "البروتين جيد أسبوعياً" : `ناقصك ${formatNumber(Math.abs(balances.proteinBalance))}g بروتين`,
+      text: balances.proteinBalance >= 0
+        ? "استمر بنفس توزيع البروتين، ولا تتركه يتجمع في آخر اليوم."
+        : `عوضه بمتوسط ${formatNumber(Math.abs(balances.proteinBalance) / balances.remainingDays)}g بروتين في الأيام المتبقية.`,
+      action: "اختر وجبة بروتين عالية قبل الكارب.",
+    },
+    fat: {
+      title: balances.fatBalance >= 0 ? "الدهون ضمن الحد" : `الدهون زائدة ${formatNumber(Math.abs(balances.fatBalance))}g`,
+      text: balances.fatBalance >= 0
+        ? "عندك مساحة للدهون، لكن الأفضل تتركها للطعام الأساسي لا للصوص."
+        : "خفف الصوص والزيوت والمكسرات حتى يرجع الأسبوع للحد.",
+      action: "اجعل الوجبة القادمة بروتين وكارب خفيف.",
+    },
+    cardio: {
+      title: `${formatNumber(weekStats().cardio)} سعرة كارديو هذا الأسبوع`,
+      text: "الكارديو هنا يعوض السعرات ويدعم العجز، لكنه لا يغني عن ضبط الوجبات.",
+      action: "سجل جلسة قصيرة عند وجود زيادة سعرات.",
+    },
+    nutrition: {
+      title: badDays ? `${badDays} أيام تحتاج مراجعة` : "تغذيتك مرتبة",
+      text: badDays ? "الأيام غير الملتزمة غالباً بسبب بروتين ناقص أو دهون/سعرات أعلى من الخطة." : "استمر، ركز فقط على تكرار نفس السلوك.",
+      action: "افتح الأيام الملونة وعدلها من نفس اللوحة.",
+    },
+    consistency: {
+      title: missedDays ? `${missedDays} أيام غير مسجلة` : "كل أيام الأسبوع واضحة",
+      text: missedDays ? "المشكلة ليست دائماً في الأكل؛ أحياناً عدم التسجيل يخفي السبب." : "عندك صورة أسبوعية كافية لاتخاذ قرار تعويض ذكي.",
+      action: "افتح الأيام الناقصة وسجل الحد الأدنى.",
+    },
+  };
+  return maps[type] || maps.consistency;
+}
+
 function renderComplianceInsight(type = "consistency") {
   const dates = getWeekDates();
   const rows = dates.map(dayInsight);
@@ -777,6 +893,7 @@ function renderComplianceInsight(type = "consistency") {
   const proteinBalance = loggedRows.reduce((sum, row) => sum + row.proteinDelta, 0);
   const fatBalance = loggedRows.reduce((sum, row) => sum + row.fatDelta, 0);
   const remainingDays = Math.max(1, rows.filter((row) => row.dateISO >= activeDate).length);
+  const verdict = insightVerdict(type, { calorieBalance, proteinBalance, fatBalance, remainingDays }, rows);
   const titleMap = {
     calories: "تفاصيل السعرات والالتزام",
     protein: "تفاصيل البروتين والتعويض",
@@ -800,6 +917,12 @@ function renderComplianceInsight(type = "consistency") {
       <div class="split-title">
         <h2>${titleMap[type] || "تفاصيل الالتزام"}</h2>
         <button class="btn icon secondary" type="button" data-action="close-insight" title="إغلاق">×</button>
+      </div>
+      <div class="insight-command ${type}">
+        <span class="hero-label">الخلاصة</span>
+        <h3>${verdict.title}</h3>
+        <p>${verdict.text}</p>
+        <strong>${verdict.action}</strong>
       </div>
       <div class="insight-summary">
         ${metric("ميزان السعرات", `${calorieBalance >= 0 ? "+" : ""}${formatNumber(calorieBalance)}`, calorieAdvice)}
@@ -869,34 +992,72 @@ function renderFoodLog() {
   const entries = state.foodLogs.filter((entry) => entry.date === activeDate);
   const cardioEntries = state.cardioLogs.filter((entry) => entry.date === activeDate);
   const food = dayFood();
+  const remainingCalories = state.settings.targetCalories - food.calories;
+  const proteinLeft = Math.max(0, state.settings.proteinGoal - food.protein);
+  const cardioTotal = dayCardio();
   document.querySelector("#food-log").innerHTML = `
     <div class="split-title"><h2>اليوم</h2><span class="pill good">${formatNumber(food.calories)} سعرة</span></div>
-    <p class="section-kicker">سجل وجبتك بسرعة، وشاهد الصوص والماكروز قبل الحفظ.</p>
-    <form class="panel" id="foodForm">
-      <div class="field-grid">
+    <section class="today-command">
+      <div>
+        <span class="hero-label">وضع اليوم</span>
+        <h3>${remainingCalories >= 0 ? `باقي ${formatNumber(remainingCalories)} سعرة` : `زائد ${formatNumber(Math.abs(remainingCalories))} سعرة`}</h3>
+        <p>${proteinLeft ? `ركز الآن على ${formatNumber(proteinLeft)}g بروتين.` : "البروتين ممتاز، حافظ على هدوء السعرات."}</p>
+      </div>
+      <div class="today-command-grid">
+        <span><strong>${formatNumber(food.protein)}</strong>g بروتين</span>
+        <span><strong>${formatNumber(food.fat)}</strong>g دهون</span>
+        <span><strong>${formatNumber(cardioTotal)}</strong> كارديو</span>
+      </div>
+    </section>
+
+    <form class="panel meal-entry-panel" id="foodForm">
+      <div class="entry-head">
+        <div>
+          <span class="hero-label">${editingEntry ? "تعديل وجبة" : "إضافة وجبة"}</span>
+          <h3>اختر الصنف والكمية</h3>
+        </div>
+        <span class="pill info">يعرض الماكروز قبل الحفظ</span>
+      </div>
+      <div class="meal-main-grid">
         <div class="field"><label>نوع الوجبة</label><select class="select" name="slot">
           ${["الفطور", "الغداء", "السناك", "العشاء", "وجبة إضافية"].map((slot) => `<option ${editingEntry?.slot === slot ? "selected" : ""}>${slot}</option>`).join("")}
         </select></div>
         <div class="field"><label>الصنف أو الوجبة الجاهزة</label><select class="select" name="source">${sourceOptions()}</select></div>
         <div class="field"><label>كمية الصنف بالجرام</label><input class="input" name="grams" type="number" min="0" step="1" value="${editingEntry?.grams || 100}" /></div>
-        <div class="field"><label>الصوص</label><select class="select" name="sauceId">${sauceOptions(editingEntry?.sauceId)}</select></div>
-        <div class="field"><label>كمية الصوص بالجرام</label><input class="input" name="sauceGrams" type="number" min="0" step="1" value="${editingEntry?.sauceGrams || 0}" /></div>
-        <div class="field"><label>ملاحظات</label><input class="input" name="notes" value="${editingEntry?.notes || ""}" placeholder="اختياري" /></div>
       </div>
-      <div id="foodPreview" class="compact-note"></div>
+      <details class="optional-entry">
+        <summary>صوص وملاحظات</summary>
+        <div class="field-grid">
+          <div class="field"><label>الصوص</label><select class="select" name="sauceId">${sauceOptions(editingEntry?.sauceId)}</select></div>
+          <div class="field"><label>كمية الصوص بالجرام</label><input class="input" name="sauceGrams" type="number" min="0" step="1" value="${editingEntry?.sauceGrams || 0}" /></div>
+          <div class="field"><label>ملاحظات</label><input class="input" name="notes" value="${editingEntry?.notes || ""}" placeholder="اختياري" /></div>
+        </div>
+      </details>
+      <div id="foodPreview" class="food-preview-card"></div>
       <div class="actions">
         <button class="btn" type="submit">${editingEntry ? "تحديث الوجبة" : "إضافة الوجبة"}</button>
         ${editingEntry ? `<button class="btn secondary" type="button" data-action="cancel-edit">إلغاء</button>` : ""}
       </div>
     </form>
     <form class="panel daily-cardio-panel" id="dailyCardioForm">
-      <div class="split-title"><h3>تسجيل كارديو اليوم</h3><span class="pill">${formatNumber(dayCardio())} سعرة اليوم</span></div>
-      <div class="field-grid">
-        <div class="field"><label>نوع التمرين</label><input class="input" name="type" required placeholder="مشي سريع، سير، دراجة..." /></div>
-        <div class="field"><label>المدة بالدقائق</label><input class="input" name="minutes" type="number" min="1" step="1" required placeholder="30" /></div>
-        <div class="field"><label>السعرات المحروقة</label><input class="input" name="calories" type="number" min="1" step="1" required placeholder="250" /></div>
-        <div class="field"><label>ملاحظات</label><input class="input" name="notes" placeholder="اختياري" /></div>
+      <div class="entry-head">
+        <div>
+          <span class="hero-label">كارديو</span>
+          <h3>سجل تمرين اليوم</h3>
+        </div>
+        <span class="pill">${formatNumber(cardioTotal)} سعرة اليوم</span>
       </div>
+      <div class="cardio-main-grid">
+        <div class="field"><label>نوع التمرين</label><input class="input" name="type" required placeholder="مشي سريع، سير، دراجة..." /></div>
+        <div class="field"><label>السعرات المحروقة</label><input class="input" name="calories" type="number" min="1" step="1" required placeholder="250" /></div>
+        <div class="field"><label>المدة بالدقائق</label><input class="input" name="minutes" type="number" min="1" step="1" required placeholder="30" /></div>
+      </div>
+      <details class="optional-entry">
+        <summary>ملاحظات التمرين</summary>
+        <div class="field-grid">
+          <div class="field"><label>ملاحظات</label><input class="input" name="notes" placeholder="اختياري" /></div>
+        </div>
+      </details>
       <input type="hidden" name="date" value="${activeDate}" />
       <div class="actions"><button class="btn" type="submit">حفظ الكارديو</button></div>
     </form>
@@ -970,7 +1131,15 @@ function updateFoodPreview() {
   const [sourceType, itemId] = form.source.value.split(":");
   const temp = { sourceType, itemId, grams: form.grams.value, sauceId: form.sauceId.value, sauceGrams: form.sauceGrams.value };
   const macros = itemId ? entryMacros(temp) : { calories: 0, protein: 0, carbs: 0, fat: 0 };
-  document.querySelector("#foodPreview").textContent = `المتوقع: ${formatNumber(macros.calories)} سعرة · بروتين ${formatNumber(macros.protein)}غ · كارب ${formatNumber(macros.carbs)}غ · دهون ${formatNumber(macros.fat)}غ`;
+  document.querySelector("#foodPreview").innerHTML = `
+    <span>المتوقع</span>
+    <strong>${formatNumber(macros.calories)} سعرة</strong>
+    <div>
+      <b>${formatNumber(macros.protein)}g بروتين</b>
+      <b>${formatNumber(macros.carbs)}g كارب</b>
+      <b>${formatNumber(macros.fat)}g دهون</b>
+    </div>
+  `;
 }
 
 function saveFoodEntry(event) {
@@ -1035,7 +1204,7 @@ function renderImportedFoodCard(item) {
     <article class="import-card">
       <div>
         <p class="item-title">${item.name}</p>
-        <p class="item-meta">${item.category}${item.brand ? ` · ${item.brand}` : ""} · Serving ${item.servingSize || 100}${item.servingUnit || "g"}</p>
+        <p class="item-meta">${item.category}${item.brand ? ` · ${item.brand}` : ""} · الحصة ${item.servingSize || 100}${item.servingUnit || "g"}</p>
         <div class="meal-macros">
           <span class="pill good">${formatNumber(item.calories)} cal</span>
           <span class="pill">P ${formatNumber(item.protein)}g</span>
@@ -1043,7 +1212,7 @@ function renderImportedFoodCard(item) {
           <span class="pill">F ${formatNumber(item.fat)}g</span>
         </div>
       </div>
-      <button class="btn secondary" type="button" data-import-food="${item.fdcId || item.name}">Save</button>
+      <button class="btn secondary" type="button" data-import-food="${item.fdcId || item.name}">حفظ</button>
     </article>
   `;
 }
@@ -1080,7 +1249,7 @@ function manualFoodForm(barcode = "") {
         ${macroInputs({})}
         <div class="field"><label>حجم الحصة</label><input class="input" name="servingSize" type="number" value="100" /></div>
       </div>
-      <button class="btn" type="submit">Save to My Foods</button>
+      <button class="btn" type="submit">حفظ في أطعمي</button>
     </form>
   `;
 }
@@ -1113,7 +1282,7 @@ function renderAdd() {
     </section>
 
     <section class="panel api-panel">
-      <div class="split-title"><h3>USDA Food Search</h3><span class="pill info">FoodData Central</span></div>
+      <div class="split-title"><h3>بحث الأطعمة العالمي</h3><span class="pill info">USDA</span></div>
       <div class="field">
         <label>ابحث عن طعام عالمي</label>
         <input class="input" id="usdaSearchInput" placeholder="مثال: chicken breast, greek yogurt, oats" autocomplete="off" />
@@ -1123,7 +1292,7 @@ function renderAdd() {
     </section>
 
     <section class="panel api-panel">
-      <div class="split-title"><h3>Barcode Scanner</h3><span class="pill">Camera</span></div>
+      <div class="split-title"><h3>قارئ الباركود</h3><span class="pill">الكاميرا</span></div>
       <div class="scanner-box">
         <video id="barcodeVideo" playsinline muted></video>
         <div id="barcodeState" class="api-state">افتح الكاميرا أو أدخل الباركود يدوياً.</div>
@@ -1133,7 +1302,7 @@ function renderAdd() {
         <button class="btn secondary" type="button" data-action="stop-barcode">إيقاف</button>
       </div>
       <div class="field">
-        <label>Barcode يدوي</label>
+        <label>باركود يدوي</label>
         <input class="input" id="manualBarcode" placeholder="مثال: 012345678905" />
       </div>
       <div class="actions"><button class="btn secondary" type="button" data-action="lookup-barcode">بحث عن المنتج</button></div>
@@ -1366,7 +1535,7 @@ function renderProgress() {
     <section class="coach-card progress-coach">
       <div class="coach-avatar">${icon("coach")}</div>
       <div>
-        <span class="hero-label">Progress Coach</span>
+        <span class="hero-label">مدرب التقدم</span>
         <h3>${smart.title}</h3>
         <p>${smart.text}</p>
       </div>
@@ -1377,7 +1546,7 @@ function renderProgress() {
       ${weeklyMini("متوسط النزول", `${formatNumber(avgWeeklyLoss, 2)} kg`, "أسبوعياً")}
       ${weeklyMini("متوسط 7 أيام", `${formatNumber(rollingAverage(logs, "weight", 7), 1)} kg`, "وزن")}
       ${weeklyMini("متوسط 30 يوم", `${formatNumber(rollingAverage(logs, "weight", 30), 1)} kg`, "وزن")}
-      ${weeklyMini("Goal ETA", smart.eta, "حسب المعدل الحالي")}
+      ${weeklyMini("موعد الهدف", smart.eta, "حسب المعدل الحالي")}
     </div>
     <div class="chart-row">
       <article class="chart-card"><h3>وزني</h3><canvas class="chart" id="weightChart"></canvas></article>
@@ -1496,10 +1665,10 @@ function saveCardio(event) {
 function renderSettings() {
   const s = state.settings;
   document.querySelector("#settings").innerHTML = `
-    <div class="split-title"><h2>المزيد</h2><span class="pill">النظام</span></div>
-    <p class="section-kicker">الأهداف وقواعد البيانات في مكان واحد، بعيداً عن شاشة القرار اليومي.</p>
+    <div class="split-title"><h2>مركز التحكم</h2><span class="pill">النظام</span></div>
+    <p class="section-kicker">الأهداف، النسخ الاحتياطي، والتقارير في مكان واحد.</p>
     <section class="quick-actions">
-      <button class="quick-action" data-view="ai-coach" type="button"><span>${icon("coach")}</span>AI Coach</button>
+      <button class="quick-action" data-view="ai-coach" type="button"><span>${icon("coach")}</span>المدرب الذكي</button>
       <button class="quick-action secondary" data-action="copy-ai-report" type="button"><span>${icon("spark")}</span>نسخ التقرير</button>
       <button class="quick-action secondary" data-action="export-backup" type="button"><span>${icon("database")}</span>نسخة احتياطية</button>
     </section>
@@ -1552,14 +1721,14 @@ function renderSettings() {
       </details>
 
       <details class="panel details-card" id="apiSettings">
-        <summary>API Integrations</summary>
+        <summary>الربط التقني</summary>
         <form id="apiSettingsForm" class="subform">
           <div class="field-grid">
-            <div class="field"><label>USDA API Key</label><input class="input" name="usda" type="password" value="${localStorage.getItem("USDA_API_KEY") || ""}" placeholder="Stored locally" /></div>
-            <div class="field"><label>OpenAI API Key</label><input class="input" name="openai" type="password" value="${localStorage.getItem("OPENAI_API_KEY") || ""}" placeholder="Stored locally" /></div>
+            <div class="field"><label>مفتاح USDA</label><input class="input" name="usda" type="password" value="${localStorage.getItem("USDA_API_KEY") || ""}" placeholder="محفوظ محلياً" /></div>
+            <div class="field"><label>مفتاح OpenAI</label><input class="input" name="openai" type="password" value="${localStorage.getItem("OPENAI_API_KEY") || ""}" placeholder="محفوظ محلياً" /></div>
           </div>
-          <p class="compact-note">للتطبيق الثابت تُحفظ المفاتيح محلياً في المتصفح. للإنتاج الأفضل استخدام Backend Proxy يقرأ ملف env ولا يرسل المفاتيح للواجهة.</p>
-          <div class="actions"><button class="btn" type="submit">حفظ مفاتيح API</button></div>
+          <p class="compact-note">تحفظ المفاتيح داخل هذا المتصفح فقط.</p>
+          <div class="actions"><button class="btn" type="submit">حفظ المفاتيح</button></div>
         </form>
       </details>
     </div>
@@ -1784,13 +1953,13 @@ function aiContext() {
 
 function renderAICoach() {
   document.querySelector("#ai-coach").innerHTML = `
-    <div class="split-title"><h2>AI Coach</h2><span class="pill info">Nutrition Intelligence</span></div>
-    <p class="section-kicker">مدربك الذكي يستخدم بيانات السعرات، الماكروز، الكارديو، الوزن والخصر ليعطيك قرارات عملية.</p>
+    <div class="split-title"><h2>المدرب الذكي</h2><span class="pill info">تحليل التغذية</span></div>
+    <p class="section-kicker">تحليل عملي من بيانات السعرات، الماكروز، الكارديو، الوزن والخصر.</p>
     <section class="coach-command-grid">
-      <button class="quick-action" data-ai-task="dailyCoach" type="button"><span>${icon("coach")}</span>Daily Coach</button>
-      <button class="quick-action secondary" data-ai-task="weeklyAnalysis" type="button"><span>${icon("trending")}</span>Weekly Analysis</button>
-      <button class="quick-action secondary" data-ai-task="progressAnalysis" type="button"><span>${icon("scale")}</span>Progress</button>
-      <button class="quick-action secondary" data-ai-task="mealSuggestions" type="button"><span>${icon("chef")}</span>Meal Ideas</button>
+      <button class="quick-action" data-ai-task="dailyCoach" type="button"><span>${icon("coach")}</span>قرار اليوم</button>
+      <button class="quick-action secondary" data-ai-task="weeklyAnalysis" type="button"><span>${icon("trending")}</span>تحليل الأسبوع</button>
+      <button class="quick-action secondary" data-ai-task="progressAnalysis" type="button"><span>${icon("scale")}</span>تحليل التقدم</button>
+      <button class="quick-action secondary" data-ai-task="mealSuggestions" type="button"><span>${icon("chef")}</span>أفكار وجبات</button>
     </section>
     <form class="panel" id="aiQuestionForm">
       <div class="field">
@@ -1799,15 +1968,15 @@ function renderAICoach() {
       </div>
       <div class="actions">
         <button class="btn" type="submit">اسأل</button>
-        <button class="btn secondary" type="button" data-ai-task="foodAdvisor" data-ai-question="عندي عزيمة">Food Advisor</button>
+        <button class="btn secondary" type="button" data-ai-task="foodAdvisor" data-ai-question="عندي عزيمة">مستشار وجبة</button>
       </div>
     </form>
     <article class="coach-card ai-response">
       <div class="coach-avatar">${icon("spark")}</div>
       <div>
-        <span class="hero-label">Coach Response</span>
+        <span class="hero-label">رد المدرب</span>
         <h3>${aiLastResponse ? "آخر تحليل" : "جاهز للتحليل"}</h3>
-        <p id="aiResponse">${aiLastResponse || "اضغط على أحد الأزرار أو اكتب سؤالاً. يعمل Offline Fallback إذا لم تضف مفتاح OpenAI."}</p>
+        <p id="aiResponse">${aiLastResponse || "اضغط على أحد الأزرار أو اكتب سؤالاً. إذا لم تضف مفتاح OpenAI سيظهر تحليل محلي مبسط."}</p>
       </div>
     </article>
   `;
@@ -1827,7 +1996,7 @@ async function runAITask(task, question = "") {
     if (task === "foodAdvisor") aiLastResponse = await service.foodAdvisor(context, question || "عندي عزيمة");
     if (task === "questionAnswer") aiLastResponse = await service.questionAnswer(context, question);
   } catch (error) {
-    aiLastResponse = error.message || "تعذر تشغيل AI Coach.";
+    aiLastResponse = error.message || "تعذر تشغيل المدرب الذكي.";
   }
   renderAICoach();
 }
