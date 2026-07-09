@@ -640,7 +640,7 @@ function renderDashboard() {
         ${macroCard("protein", "البروتين", food.protein, state.settings.proteinGoal, "g", "protein", `باقي ${formatNumber(proteinLeft)}g`)}
         ${macroCard("carbs", "الكارب", food.carbs, state.settings.carbsGoal, "g", "carbs", `هدف ${formatNumber(state.settings.carbsGoal)}g`)}
         ${macroCard("fat", "الدهون", food.fat, state.settings.fatGoal, "g", "fat", `متاح ${formatNumber(fatRoom)}g`)}
-        ${macroCard("cardio", "الكارديو", cardio, cardioGoal, "cal", "cardio", `باقي ${formatNumber(cardioLeft)}`)}
+        ${macroCard("cardio", "الكارديو", cardio, cardioGoal, "سعرة", "cardio", `باقي ${formatNumber(cardioLeft)}`)}
       </section>
     </div>
     ${activeDashboardInsight ? renderComplianceInsight(activeDashboardInsight) : ""}
@@ -662,8 +662,8 @@ function renderDashboard() {
 
     <div class="section-title"><h2>التقدم</h2><span class="pill info">آخر قياس</span></div>
     <section class="progress-section">
-      ${progressMini("scale", "الوزن الحالي", latest.weight, "kg", latest.weightDelta, true)}
-      ${progressMini("waist", "الخصر الحالي", latest.waist, "cm", latest.waistDelta, true)}
+      ${progressMini("scale", "الوزن الحالي", latest.weight, "كجم", latest.weightDelta, true)}
+      ${progressMini("waist", "الخصر الحالي", latest.waist, "سم", latest.waistDelta, true)}
     </section>
 
     ${renderWeeklySummary()}
@@ -1110,9 +1110,9 @@ function renderFoodEntry(entry) {
           <p class="item-meta">${entry.grams} غ${sauce ? ` + ${entry.sauceGrams} غ ${sauce.name}` : ""}</p>
           <div class="meal-macros">
             <span class="pill good">${formatNumber(macros.calories)} سعرة</span>
-            <span class="pill">P ${formatNumber(macros.protein)}g</span>
-            <span class="pill info">C ${formatNumber(macros.carbs)}g</span>
-            <span class="pill">F ${formatNumber(macros.fat)}g</span>
+            <span class="pill">بروتين ${formatNumber(macros.protein)}g</span>
+            <span class="pill info">كارب ${formatNumber(macros.carbs)}g</span>
+            <span class="pill">دهون ${formatNumber(macros.fat)}g</span>
           </div>
         </div>
         <div class="actions">
@@ -1206,10 +1206,10 @@ function renderImportedFoodCard(item) {
         <p class="item-title">${item.name}</p>
         <p class="item-meta">${item.category}${item.brand ? ` · ${item.brand}` : ""} · الحصة ${item.servingSize || 100}${item.servingUnit || "g"}</p>
         <div class="meal-macros">
-          <span class="pill good">${formatNumber(item.calories)} cal</span>
-          <span class="pill">P ${formatNumber(item.protein)}g</span>
-          <span class="pill info">C ${formatNumber(item.carbs)}g</span>
-          <span class="pill">F ${formatNumber(item.fat)}g</span>
+          <span class="pill good">${formatNumber(item.calories)} سعرة</span>
+          <span class="pill">بروتين ${formatNumber(item.protein)}g</span>
+          <span class="pill info">كارب ${formatNumber(item.carbs)}g</span>
+          <span class="pill">دهون ${formatNumber(item.fat)}g</span>
         </div>
       </div>
       <button class="btn secondary" type="button" data-import-food="${item.fdcId || item.name}">حفظ</button>
@@ -1260,7 +1260,7 @@ function saveManualImportedFood(event) {
   state.foods.push({
     id: crypto.randomUUID(),
     name: data.name,
-    category: "Barcode",
+    category: "باركود",
     calories: Number(data.calories),
     protein: Number(data.protein),
     carbs: Number(data.carbs),
@@ -1428,7 +1428,7 @@ function dbItem(item, type) {
       <div class="item-head">
         <div>
           <p class="item-title">${item.name} <span class="pill">${type === "sauce" ? "صوص" : item.category}</span></p>
-          <p class="item-meta">لكل 100 غ: ${formatNumber(item.calories)} سعرة · P ${formatNumber(item.protein, 1)} / C ${formatNumber(item.carbs, 1)} / F ${formatNumber(item.fat, 1)} ${item.notes ? `· ${item.notes}` : ""}</p>
+          <p class="item-meta">لكل 100 غ: ${formatNumber(item.calories)} سعرة · بروتين ${formatNumber(item.protein, 1)} · كارب ${formatNumber(item.carbs, 1)} · دهون ${formatNumber(item.fat, 1)} ${item.notes ? `· ${item.notes}` : ""}</p>
         </div>
         <div class="actions">
           <button class="btn icon secondary" data-edit-${type}="${item.id}" title="تعديل">✎</button>
@@ -1519,34 +1519,51 @@ function renderProgress() {
   const bestWeek = bestProgressWeek();
   const recompositionAlert = logs.length >= 2 && Math.abs(logs.at(-1).weight - logs.at(-2).weight) < 0.3 && logs.at(-1).waist < logs.at(-2).waist;
   const smart = progressIntelligence(logs);
+  const targetGap = latest ? latest.weight - state.settings.goalWeight : 0;
+  const waistGap = latest ? latest.waist - state.settings.goalWaist : 0;
   document.querySelector("#progress").innerHTML = `
     <div class="split-title"><h2>التقدم</h2><span class="pill">${logs.length} قياس</span></div>
-    <p class="section-kicker">اتجاه الجسم أهم من رقم يوم واحد. راقب الوزن والخصر والعجز معاً.</p>
-    <form class="panel" id="progressForm">
-      <div class="field-grid">
-        <div class="field"><label>التاريخ</label><input class="input" name="date" type="date" value="${activeDate}" /></div>
-        <div class="field"><label>الوزن</label><input class="input" name="weight" type="number" step="0.1" required /></div>
-        <div class="field"><label>محيط الخصر</label><input class="input" name="waist" type="number" step="0.1" required /></div>
-        <div class="field"><label>ملاحظات</label><input class="input" name="notes" /></div>
-      </div>
-      <div class="actions"><button class="btn" type="submit">تسجيل القياس</button></div>
-    </form>
-    ${recompositionAlert ? `<div class="alert good">الوزن شبه ثابت لكن الخصر ينزل. هذا غالباً تقدم جيد في تركيب الجسم.</div>` : ""}
-    <section class="coach-card progress-coach">
-      <div class="coach-avatar">${icon("coach")}</div>
+    <section class="progress-command">
       <div>
-        <span class="hero-label">مدرب التقدم</span>
+        <span class="hero-label">اتجاه الجسم</span>
         <h3>${smart.title}</h3>
         <p>${smart.text}</p>
       </div>
+      <div class="progress-command-grid">
+        <span><strong>${latest?.weight ? formatNumber(latest.weight, 1) : "--"}</strong> كجم الآن</span>
+        <span><strong>${latest?.waist ? formatNumber(latest.waist, 1) : "--"}</strong> سم خصر</span>
+        <span><strong>${latest ? formatNumber(targetGap, 1) : "--"}</strong> كجم للهدف</span>
+      </div>
     </section>
+    <form class="panel progress-entry-panel" id="progressForm">
+      <div class="entry-head">
+        <div>
+          <span class="hero-label">قياس جديد</span>
+          <h3>سجل الوزن والخصر</h3>
+        </div>
+        <span class="pill info">${smart.eta}</span>
+      </div>
+      <div class="progress-main-grid">
+        <div class="field"><label>التاريخ</label><input class="input" name="date" type="date" value="${activeDate}" /></div>
+        <div class="field"><label>الوزن</label><input class="input" name="weight" type="number" step="0.1" required /></div>
+        <div class="field"><label>محيط الخصر</label><input class="input" name="waist" type="number" step="0.1" required /></div>
+      </div>
+      <details class="optional-entry">
+        <summary>ملاحظات القياس</summary>
+        <div class="field-grid">
+          <div class="field"><label>ملاحظات</label><input class="input" name="notes" placeholder="نوم، احتباس، تمرين قوي..." /></div>
+        </div>
+      </details>
+      <div class="actions"><button class="btn" type="submit">تسجيل القياس</button></div>
+    </form>
+    ${recompositionAlert ? `<div class="alert good">الوزن شبه ثابت لكن الخصر ينزل. هذا غالباً تقدم جيد في تركيب الجسم.</div>` : ""}
     <div class="weekly-strip">
-      ${weeklyMini("تغير الوزن", `${formatNumber(weightChange, 1)} kg`, "من البداية")}
-      ${weeklyMini("تغير الخصر", `${formatNumber(waistChange, 1)} cm`, "من البداية")}
-      ${weeklyMini("متوسط النزول", `${formatNumber(avgWeeklyLoss, 2)} kg`, "أسبوعياً")}
-      ${weeklyMini("متوسط 7 أيام", `${formatNumber(rollingAverage(logs, "weight", 7), 1)} kg`, "وزن")}
-      ${weeklyMini("متوسط 30 يوم", `${formatNumber(rollingAverage(logs, "weight", 30), 1)} kg`, "وزن")}
-      ${weeklyMini("موعد الهدف", smart.eta, "حسب المعدل الحالي")}
+      ${weeklyMini("تغير الوزن", `${formatNumber(weightChange, 1)} كجم`, "من البداية")}
+      ${weeklyMini("تغير الخصر", `${formatNumber(waistChange, 1)} سم`, "من البداية")}
+      ${weeklyMini("متوسط النزول", `${formatNumber(avgWeeklyLoss, 2)} كجم`, "أسبوعياً")}
+      ${weeklyMini("متوسط 7 أيام", `${formatNumber(rollingAverage(logs, "weight", 7), 1)} كجم`, "وزن")}
+      ${weeklyMini("متوسط 30 يوم", `${formatNumber(rollingAverage(logs, "weight", 30), 1)} كجم`, "وزن")}
+      ${weeklyMini("فارق الخصر", latest ? `${formatNumber(waistGap, 1)} سم` : "--", "عن الهدف")}
     </div>
     <div class="chart-row">
       <article class="chart-card"><h3>وزني</h3><canvas class="chart" id="weightChart"></canvas></article>
@@ -1594,11 +1611,11 @@ function progressIntelligence(logs) {
   const remaining = latest.weight - state.settings.goalWeight;
   const etaWeeks = weeklyLoss > 0 ? Math.ceil(remaining / weeklyLoss) : 0;
   if (weeklyLoss <= 0) {
-    return { title: "احتاجين تعديل بسيط", text: "المعدل الحالي لا يتجه للهدف. راجع متوسط السعرات أو ارفع الحركة الأسبوعية.", eta: "غير واضح" };
+    return { title: "تحتاج تعديل بسيط", text: "المعدل الحالي لا يتجه للهدف. راجع متوسط السعرات أو ارفع الحركة الأسبوعية.", eta: "غير واضح" };
   }
   return {
     title: "ممتاز، استمر بهذا المعدل",
-    text: `تنزل تقريباً ${formatNumber(weeklyLoss, 2)} kg أسبوعياً. لو استمر هذا الإيقاع ستصل لهدفك خلال ${etaWeeks} أسابيع.`,
+    text: `تنزل تقريباً ${formatNumber(weeklyLoss, 2)} كجم أسبوعياً. لو استمر هذا الإيقاع ستصل لهدفك خلال ${etaWeeks} أسابيع.`,
     eta: `${etaWeeks} أسابيع`,
   };
 }
@@ -1666,7 +1683,14 @@ function renderSettings() {
   const s = state.settings;
   document.querySelector("#settings").innerHTML = `
     <div class="split-title"><h2>مركز التحكم</h2><span class="pill">النظام</span></div>
-    <p class="section-kicker">الأهداف، النسخ الاحتياطي، والتقارير في مكان واحد.</p>
+    <section class="control-command">
+      <div>
+        <span class="hero-label">حفظ واستمرارية</span>
+        <h3>بياناتك أولاً</h3>
+        <p>صدّر نسخة، عدل الأهداف، وخذ تقريراً جاهزاً للمدرب الذكي بدون تشتيت شاشة اليوم.</p>
+      </div>
+      <button class="command-button" type="button" data-action="export-backup">تصدير نسخة الآن</button>
+    </section>
     <section class="quick-actions">
       <button class="quick-action" data-view="ai-coach" type="button"><span>${icon("coach")}</span>المدرب الذكي</button>
       <button class="quick-action secondary" data-action="copy-ai-report" type="button"><span>${icon("spark")}</span>نسخ التقرير</button>
@@ -1952,9 +1976,18 @@ function aiContext() {
 }
 
 function renderAICoach() {
+  const today = dayFood();
+  const decision = dailyDecision(today, dayCardio());
   document.querySelector("#ai-coach").innerHTML = `
     <div class="split-title"><h2>المدرب الذكي</h2><span class="pill info">تحليل التغذية</span></div>
-    <p class="section-kicker">تحليل عملي من بيانات السعرات، الماكروز، الكارديو، الوزن والخصر.</p>
+    <section class="ai-command">
+      <div>
+        <span class="hero-label">اقتراح سريع</span>
+        <h3>${decision.title}</h3>
+        <p>${decision.text}</p>
+      </div>
+      <button class="command-button" type="button" data-ai-task="dailyCoach">حلل يومي</button>
+    </section>
     <section class="coach-command-grid">
       <button class="quick-action" data-ai-task="dailyCoach" type="button"><span>${icon("coach")}</span>قرار اليوم</button>
       <button class="quick-action secondary" data-ai-task="weeklyAnalysis" type="button"><span>${icon("trending")}</span>تحليل الأسبوع</button>

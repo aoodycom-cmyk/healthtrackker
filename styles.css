@@ -865,7 +865,10 @@ button.mini-card {
 
 .daily-command,
 .today-command,
-.insight-command {
+.insight-command,
+.progress-command,
+.control-command,
+.ai-command {
   position: relative;
   overflow: hidden;
   margin-bottom: 14px;
@@ -877,7 +880,10 @@ button.mini-card {
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
 }
 
-.daily-command {
+.daily-command,
+.progress-command,
+.control-command,
+.ai-command {
   display: grid;
   gap: 14px;
   padding: 16px;
@@ -885,7 +891,10 @@ button.mini-card {
 
 .daily-command::after,
 .today-command::after,
-.insight-command::after {
+.insight-command::after,
+.progress-command::after,
+.control-command::after,
+.ai-command::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -916,7 +925,10 @@ button.mini-card {
 
 .command-copy h2,
 .today-command h3,
-.insight-command h3 {
+.insight-command h3,
+.progress-command h3,
+.control-command h3,
+.ai-command h3 {
   margin: 4px 0 6px;
   font-size: 24px;
   line-height: 1.2;
@@ -924,7 +936,10 @@ button.mini-card {
 
 .command-copy p,
 .today-command p,
-.insight-command p {
+.insight-command p,
+.progress-command p,
+.control-command p,
+.ai-command p {
   margin: 0;
   color: var(--soft);
   font-size: 13px;
@@ -954,14 +969,16 @@ button.mini-card {
 }
 
 .command-stats,
-.today-command-grid {
+.today-command-grid,
+.progress-command-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
 .command-stats span,
-.today-command-grid span {
+.today-command-grid span,
+.progress-command-grid span {
   display: grid;
   gap: 3px;
   min-height: 54px;
@@ -977,7 +994,8 @@ button.mini-card {
 }
 
 .command-stats strong,
-.today-command-grid strong {
+.today-command-grid strong,
+.progress-command-grid strong {
   color: var(--ink);
   font-size: 18px;
   line-height: 1;
@@ -1110,7 +1128,8 @@ button.mini-card {
 }
 
 .meal-main-grid,
-.cardio-main-grid {
+.cardio-main-grid,
+.progress-main-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
@@ -1782,12 +1801,23 @@ button.mini-card {
     align-items: center;
   }
 
+  .progress-command,
+  .control-command,
+  .ai-command {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.65fr);
+    align-items: center;
+  }
+
   .meal-main-grid {
     grid-template-columns: 0.8fr 1.4fr 0.7fr;
   }
 
   .cardio-main-grid {
     grid-template-columns: 1.3fr 0.8fr 0.8fr;
+  }
+
+  .progress-main-grid {
+    grid-template-columns: 1fr 1fr 1fr;
   }
 
   .macro-grid {
