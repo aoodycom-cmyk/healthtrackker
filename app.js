@@ -55,9 +55,11 @@ activeDateInput.value = activeDate;
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   const savedSettings = loadSettingsOnly();
-  if (!raw) return { ...structuredClone(defaultState), settings: savedSettings || normalizeSettings() };
+  if (!raw) return loadBundledRestore(savedSettings) || { ...structuredClone(defaultState), settings: savedSettings || normalizeSettings() };
   try {
     const parsed = JSON.parse(raw);
+    const restored = maybeUseBundledRestore(parsed, savedSettings);
+    if (restored) return restored;
     const base = structuredClone(defaultState);
     const mergedSettings = normalizeSettings(savedSettings ? { ...(parsed.settings || {}), ...savedSettings } : parsed.settings);
     const merged = { ...base, ...parsed, settings: mergedSettings };
@@ -67,8 +69,29 @@ function loadState() {
     if (!savedSettings) saveSettingsOnly(mergedSettings);
     return stripStoredPhotos(merged);
   } catch {
-    return { ...structuredClone(defaultState), settings: savedSettings || normalizeSettings() };
+    return loadBundledRestore(savedSettings) || { ...structuredClone(defaultState), settings: savedSettings || normalizeSettings() };
   }
+}
+
+function loadBundledRestore(savedSettings = null) {
+  const snapshot = window.HEALTHTRACKKER_BUNDLED_RESTORE?.state;
+  if (!snapshot || meaningfulDataCount(snapshot) === 0) return null;
+  const restored = normalizeImportedState(snapshot);
+  restored.settings = normalizeSettings(savedSettings ? { ...restored.settings, ...savedSettings } : restored.settings);
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
+    if (!savedSettings) saveSettingsOnly(restored.settings);
+    sessionStorage.setItem("bundled-restore-applied", "1");
+  } catch (error) {
+    console.warn("Unable to persist bundled restore", error);
+  }
+  return restored;
+}
+
+function maybeUseBundledRestore(parsed, savedSettings = null) {
+  const hasUserData = meaningfulDataCount(parsed) > 0;
+  if (hasUserData) return null;
+  return loadBundledRestore(savedSettings);
 }
 
 function saveState() {
