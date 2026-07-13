@@ -1865,6 +1865,20 @@ function renderSettings() {
 
 function recoveryTools() {
   recoveryCandidates = discoverRecoveryCandidates();
+  const bundledSnapshot = window.HEALTHTRACKKER_BUNDLED_RESTORE?.state;
+  const bundledSummary = bundledSnapshot && meaningfulDataCount(bundledSnapshot) > 0 ? snapshotSummary(bundledSnapshot) : null;
+  const bundledDate = window.HEALTHTRACKKER_BUNDLED_RESTORE?.exportedAt
+    ? new Date(window.HEALTHTRACKKER_BUNDLED_RESTORE.exportedAt).toLocaleDateString("ar-SA")
+    : "8 يوليو";
+  const bundledRestore = bundledSummary ? `
+    <div class="restore-callout">
+      <div>
+        <p class="item-title">نسخة بيانات محفوظة داخل التطبيق</p>
+        <p class="item-meta">${summaryText(bundledSummary)} · تاريخ النسخة ${bundledDate}</p>
+      </div>
+      <button class="btn" type="button" data-action="restore-bundled">استرجاع بيانات 8 يوليو</button>
+    </div>
+  ` : "";
   const candidateList = recoveryCandidates.length ? `
     <div class="list">
       ${recoveryCandidates.map((candidate, index) => `
@@ -1883,6 +1897,7 @@ function recoveryTools() {
   return `
     <div class="subform">
       <p class="compact-note">احتفظ بنسخة واحدة خارج المتصفح. الدمج لا يحذف الموجود، والاستبدال الكامل يجعل هذا المتصفح مطابقاً للملف بعد حفظ نسخة أمان أولاً.</p>
+      ${bundledRestore}
       <div class="actions">
         <button class="btn" type="button" data-action="export-backup">تصدير نسخة احتياطية</button>
       </div>
@@ -2030,6 +2045,15 @@ async function replaceBackup() {
   } catch {
     alert("تعذر قراءة ملف النسخة الاحتياطية.");
   }
+}
+
+function restoreBundledBackup() {
+  const snapshot = window.HEALTHTRACKKER_BUNDLED_RESTORE?.state;
+  if (!snapshot || meaningfulDataCount(snapshot) === 0) {
+    alert("لم أجد نسخة بيانات مدمجة داخل هذا الإصدار.");
+    return;
+  }
+  replaceStateFromSnapshot(snapshot, "نسخة بيانات 8 يوليو");
 }
 
 async function copyAIReport() {
@@ -2306,6 +2330,10 @@ function handleAction(target) {
   }
   if (action === "replace-backup") {
     replaceBackup();
+    return;
+  }
+  if (action === "restore-bundled") {
+    restoreBundledBackup();
     return;
   }
   if (action === "copy-ai-report") {
