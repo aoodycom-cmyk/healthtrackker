@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Fat Loss Coach" />
     <title>متابعة إنقاص الدهون</title>
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=restore-button-1" />
+    <link rel="stylesheet" href="./styles.css?v=rescue-export-12-1" />
     <style>
       .emergency-export {
         position: fixed;
@@ -137,10 +137,37 @@
           return Array.isArray(state?.[key]) ? state[key].length : 0;
         }
 
+        function countMeaningful(state) {
+          return countItems(state, "foodLogs")
+            + countItems(state, "cardioLogs")
+            + countItems(state, "resistanceLogs")
+            + countItems(state, "progressLogs")
+            + countItems(state, "savedDays")
+            + countItems(state, "meals");
+        }
+
         function buildEmergencyPayload() {
           const state = safeParse(localStorage.getItem(STORAGE_KEY));
           const settings = safeParse(localStorage.getItem(SETTINGS_KEY));
           const backups = safeParse(localStorage.getItem(BACKUP_KEY));
+          const backupSummaries = Array.isArray(backups) ? backups.map((backup, index) => {
+            const snapshot = safeParse(backup?.raw);
+            return {
+              index,
+              createdAt: backup?.createdAt || null,
+              counts: {
+                foods: countItems(snapshot, "foods"),
+                sauces: countItems(snapshot, "sauces"),
+                meals: countItems(snapshot, "meals"),
+                foodLogs: countItems(snapshot, "foodLogs"),
+                cardioLogs: countItems(snapshot, "cardioLogs"),
+                resistanceLogs: countItems(snapshot, "resistanceLogs"),
+                progressLogs: countItems(snapshot, "progressLogs"),
+                savedDays: countItems(snapshot, "savedDays")
+              },
+              meaningfulItems: countMeaningful(snapshot)
+            };
+          }) : [];
           const rawLocalStorage = {};
           for (let index = 0; index < localStorage.length; index += 1) {
             const key = localStorage.key(index);
@@ -157,12 +184,15 @@
               meals: countItems(state, "meals"),
               foodLogs: countItems(state, "foodLogs"),
               cardioLogs: countItems(state, "cardioLogs"),
+              resistanceLogs: countItems(state, "resistanceLogs"),
               progressLogs: countItems(state, "progressLogs"),
               savedDays: countItems(state, "savedDays")
             },
+            meaningfulItems: countMeaningful(state),
             state,
             settings,
             backups,
+            backupSummaries,
             rawLocalStorage
           };
         }
@@ -197,13 +227,13 @@
 
         button?.addEventListener("click", async () => {
           const payload = buildEmergencyPayload();
-          const total = payload.counts.foodLogs + payload.counts.cardioLogs + payload.counts.progressLogs + payload.counts.meals;
+          const backupTotal = payload.backupSummaries.reduce((sum, backup) => sum + backup.meaningfulItems, 0);
+          const total = payload.meaningfulItems + backupTotal + Object.keys(payload.rawLocalStorage).length;
           const text = JSON.stringify(payload, null, 2);
           const filename = `healthtrackker-emergency-${new Date().toISOString().slice(0, 10)}.json`;
 
-          if (!payload.state || total === 0) {
-            alert("هذا المكان لا يحتوي بيانات محفوظة. افتح الزر من أيقونة التطبيق التي تظهر فيها بياناتك.");
-            return;
+          if (total === 0) {
+            alert("لم أجد بيانات ظاهرة أو نسخ مخفية، لكن سأحاول تجهيز ملف فحص الآن.");
           }
 
           const file = new File([text], filename, { type: "application/json" });
@@ -237,7 +267,7 @@
         }
       }).catch(() => {});
     </script>
-    <script src="./bundled-restore.js?v=restore-button-1"></script>
-    <script src="./app.js?v=restore-button-1"></script>
+    <script src="./bundled-restore.js?v=rescue-export-12-1"></script>
+    <script src="./app.js?v=rescue-export-12-1"></script>
   </body>
 </html>
