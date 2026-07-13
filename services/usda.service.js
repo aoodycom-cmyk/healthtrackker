@@ -1,6 +1,7 @@
 (function () {
   const CACHE_KEY = "fatLossDashboard.usdaCache.v1";
   const BASE_URL = "https://api.nal.usda.gov/fdc/v1";
+  const OFF_URL = "https://world.openfoodfacts.org/api/v2/product";
   const cache = readCache();
 
   function readCache() {
@@ -57,6 +58,26 @@
     };
   }
 
+  function normalizeOpenFoodFacts(product, code) {
+    const nutriments = product.nutriments || {};
+    const servingQuantity = Number(product.serving_quantity || 100) || 100;
+    return {
+      source: "OpenFoodFacts",
+      fdcId: `off:${code}`,
+      barcode: code,
+      name: product.product_name_ar || product.product_name || product.generic_name || "منتج باركود",
+      brand: product.brands || "",
+      category: product.categories_tags?.[0]?.replace(/^.*:/, "") || product.categories || "باركود",
+      servingSize: servingQuantity,
+      servingUnit: product.serving_quantity_unit || "g",
+      calories: Number(nutriments["energy-kcal_100g"] ?? nutriments["energy-kcal"] ?? 0),
+      protein: Number(nutriments.proteins_100g ?? nutriments.proteins ?? 0),
+      carbs: Number(nutriments.carbohydrates_100g ?? nutriments.carbohydrates ?? 0),
+      fat: Number(nutriments.fat_100g ?? nutriments.fat ?? 0),
+      raw: product,
+    };
+  }
+
   async function search(query) {
     const apiKey = getApiKey();
     if (!apiKey) throw new Error("USDA API key is missing. Add it in More > API Integrations.");
@@ -73,7 +94,22 @@
   }
 
   async function lookupBarcode(code) {
-    return search(code);
+    const normalizedCode = String(code || "").trim();
+    if (!normalizedCode) return [];
+    const key = `barcode:${normalizedCode}`;
+    if (cache[key] && Date.now() - cache[key].createdAt < 604800000) return cache[key].data;
+    try {
+      const json = await retryFetch(`${OFF_URL}/${encodeURIComponent(normalizedCode)}.json?fields=product_name,product_name_ar,generic_name,brands,categories,categories_tags,serving_quantity,serving_quantity_unit,serving_size,nutriments`, {}, 0);
+      if (json.status === 1 && json.product) {
+        const data = [normalizeOpenFoodFacts(json.product, normalizedCode)];
+        cache[key] = { createdAt: Date.now(), data };
+        writeCache();
+        return data;
+      }
+    } catch (error) {
+      console.warn("OpenFoodFacts barcode lookup failed", error);
+    }
+    return search(normalizedCode);
   }
 
   window.USDAService = { search, lookupBarcode, normalize };

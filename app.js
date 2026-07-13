@@ -32,11 +32,12 @@ const defaultState = {
   meals: [],
   foodLogs: [],
   cardioLogs: [],
+  resistanceLogs: [],
   progressLogs: [],
   savedDays: [],
 };
 
-const stateCollections = ["foods", "sauces", "meals", "foodLogs", "cardioLogs", "progressLogs", "savedDays"];
+const stateCollections = ["foods", "sauces", "meals", "foodLogs", "cardioLogs", "resistanceLogs", "progressLogs", "savedDays"];
 
 let state = loadState();
 let activeDate = todayISO();
@@ -134,7 +135,7 @@ function parseStoredState(raw) {
 
 function meaningfulDataCount(snapshot) {
   if (!snapshot) return 0;
-  return ["foodLogs", "cardioLogs", "progressLogs", "savedDays", "meals"].reduce((sum, key) => sum + (Array.isArray(snapshot[key]) ? snapshot[key].length : 0), 0)
+  return ["foodLogs", "cardioLogs", "resistanceLogs", "progressLogs", "savedDays", "meals"].reduce((sum, key) => sum + (Array.isArray(snapshot[key]) ? snapshot[key].length : 0), 0)
     + Math.max(0, (snapshot.foods?.length || 0) - defaultState.foods.length)
     + Math.max(0, (snapshot.sauces?.length || 0) - defaultState.sauces.length);
 }
@@ -146,13 +147,14 @@ function snapshotSummary(snapshot) {
     meals: snapshot.meals?.length || 0,
     foodLogs: snapshot.foodLogs?.length || 0,
     cardioLogs: snapshot.cardioLogs?.length || 0,
+    resistanceLogs: snapshot.resistanceLogs?.length || 0,
     progressLogs: snapshot.progressLogs?.length || 0,
     savedDays: snapshot.savedDays?.length || 0,
   };
 }
 
 function summaryText(summary) {
-  return `${summary.foodLogs} وجبة · ${summary.cardioLogs} كارديو · ${summary.progressLogs} قياس · ${summary.meals} وجبات جاهزة · ${summary.foods} أطعمة`;
+  return `${summary.foodLogs} وجبة · ${summary.cardioLogs} كارديو · ${summary.resistanceLogs || 0} مقاومة · ${summary.progressLogs} قياس · ${summary.meals} وجبات جاهزة · ${summary.foods} أطعمة`;
 }
 
 function writeStateBackup(raw) {
@@ -372,6 +374,15 @@ function dayCardio(dateISO = activeDate) {
   return state.cardioLogs
     .filter((entry) => entry.date === dateISO)
     .reduce((sum, entry) => sum + Number(entry.calories || 0), 0);
+}
+
+function dayResistance(dateISO = activeDate) {
+  return state.resistanceLogs?.find((entry) => entry.date === dateISO && entry.done) || null;
+}
+
+function resistanceSessionsThisWeek() {
+  const dates = getWeekDates();
+  return (state.resistanceLogs || []).filter((entry) => entry.done && dates.includes(entry.date)).length;
 }
 
 function dayDeficit(dateISO = activeDate) {
@@ -613,6 +624,7 @@ function renderDashboard() {
   const fatRoom = Math.max(0, state.settings.maxFat - food.fat);
   const cardioGoal = Math.max(state.settings.weeklyCardioGoal / 7, 1);
   const cardioLeft = Math.max(0, cardioGoal - cardio);
+  const resistance = dayResistance();
 
   document.querySelector("#dashboard").innerHTML = `
     <section class="daily-command ${decision.tone}">
@@ -628,7 +640,7 @@ function renderDashboard() {
       <div class="command-stats">
         <span><strong>${formatNumber(Math.max(0, remaining))}</strong> سعرة متاحة</span>
         <span><strong>${formatNumber(proteinLeft)}</strong>g بروتين باقي</span>
-        <span><strong>${formatNumber(cardioLeft)}</strong> كارديو باقي</span>
+        <span><strong>${resistance ? "نعم" : "لا"}</strong> مقاومة اليوم</span>
       </div>
     </section>
 
@@ -838,6 +850,7 @@ function renderWeeklySummary() {
       ${weeklyMini("متوسط السعرات", formatNumber(averageCalories), "يومياً", "calories")}
       ${weeklyMini("أيام الالتزام", `${adherenceDays()} / 7`, "اضغط للتفاصيل", "consistency")}
       ${weeklyMini("جلسات الكارديو", cardioSessionsThisWeek(), `${formatNumber(week.cardio)} سعرة`, "cardio")}
+      ${weeklyMini("تمارين المقاومة", resistanceSessionsThisWeek(), "هذا الأسبوع", "consistency")}
       ${weeklyMini("متوسط البروتين", `${formatNumber(weekProteinAverage())} g`, "يومياً", "protein")}
     </section>
   `;
@@ -964,6 +977,7 @@ function renderComplianceInsight(type = "consistency") {
                   <span class="pill ${row.proteinDelta >= 0 ? "good" : "warn"}">${row.proteinDelta >= 0 ? "بروتين +" : "بروتين -"}${formatNumber(Math.abs(row.proteinDelta))}g</span>
                   <span class="pill ${row.fatDelta >= 0 ? "good" : "bad"}">${row.fatDelta >= 0 ? "دهون متاحة" : "دهون زائدة"} ${formatNumber(Math.abs(row.fatDelta))}g</span>
                   <span class="pill info">كارديو ${formatNumber(row.cardio)} سعرة</span>
+                  ${dayResistance(row.dateISO) ? `<span class="pill good">مقاومة</span>` : ""}
                 </div>
               </div>
               <button class="btn secondary" type="button" data-set-date="${row.dateISO}">فتح اليوم</button>
@@ -1018,6 +1032,7 @@ function renderFoodLog() {
   const remainingCalories = state.settings.targetCalories - food.calories;
   const proteinLeft = Math.max(0, state.settings.proteinGoal - food.protein);
   const cardioTotal = dayCardio();
+  const resistance = dayResistance();
   document.querySelector("#food-log").innerHTML = `
     <div class="split-title"><h2>اليوم</h2><span class="pill good">${formatNumber(food.calories)} سعرة</span></div>
     <section class="today-command">
@@ -1031,6 +1046,18 @@ function renderFoodLog() {
         <span><strong>${formatNumber(food.fat)}</strong>g دهون</span>
         <span><strong>${formatNumber(cardioTotal)}</strong> كارديو</span>
       </div>
+    </section>
+
+    <section class="panel resistance-panel ${resistance ? "active" : ""}">
+      <div>
+        <span class="hero-label">تمرين المقاومة</span>
+        <h3>${resistance ? "مسجل كتمرين مقاومة" : "هل تمرنت مقاومة اليوم؟"}</h3>
+        <p>${resistance ? "سيُحسب هذا اليوم كيوم تمرين في التحليل والتقرير." : "ضع علامة إذا تمرنت حديد/مقاومة حتى نفرق أيام التمرين عن الراحة."}</p>
+      </div>
+      <button class="resistance-toggle ${resistance ? "active" : ""}" type="button" data-action="toggle-resistance" aria-pressed="${resistance ? "true" : "false"}">
+        <span>${resistance ? "✓" : "+"}</span>
+        ${resistance ? "تمرين مقاومة" : "تسجيل مقاومة"}
+      </button>
     </section>
 
     <form class="panel meal-entry-panel" id="foodForm">
@@ -1180,13 +1207,39 @@ function foodFromExternal(item) {
   return {
     id: crypto.randomUUID(),
     name: item.name,
-    category: item.category || "Imported",
+    category: item.category || "مستورد",
     calories: Number(item.calories || 0),
     protein: Number(item.protein || 0),
     carbs: Number(item.carbs || 0),
     fat: Number(item.fat || 0),
-    notes: `${item.source || "External"} · serving ${item.servingSize || 100}${item.servingUnit || "g"}${item.brand ? ` · ${item.brand}` : ""}`,
+    notes: `${item.source || "مصدر خارجي"} · الحصة ${item.servingSize || 100}${item.servingUnit || "g"}${item.brand ? ` · ${item.brand}` : ""}${item.barcode ? ` · باركود ${item.barcode}` : ""}`,
   };
+}
+
+function importedFoodKey(item) {
+  return String(item.fdcId || item.barcode || item.name);
+}
+
+function findImportedFood(key) {
+  return usdaResults.find((result) => importedFoodKey(result) === String(key));
+}
+
+function addImportedFoodToToday(item) {
+  const food = foodFromExternal(item);
+  state.foods.push(food);
+  state.foodLogs.push({
+    id: crypto.randomUUID(),
+    date: activeDate,
+    slot: "وجبة إضافية",
+    sourceType: "food",
+    itemId: food.id,
+    grams: Number(item.servingSize || 100) || 100,
+    sauceId: "",
+    sauceGrams: 0,
+    notes: item.barcode ? `باركود ${item.barcode}` : "إضافة من البحث",
+  });
+  render();
+  setView("food-log");
 }
 
 function setupUSDAInput() {
@@ -1223,6 +1276,7 @@ async function searchUSDA(query) {
 }
 
 function renderImportedFoodCard(item) {
+  const key = importedFoodKey(item);
   return `
     <article class="import-card">
       <div>
@@ -1235,7 +1289,10 @@ function renderImportedFoodCard(item) {
           <span class="pill">دهون ${formatNumber(item.fat)}g</span>
         </div>
       </div>
-      <button class="btn secondary" type="button" data-import-food="${item.fdcId || item.name}">حفظ</button>
+      <div class="actions">
+        <button class="btn" type="button" data-add-imported-today="${key}">أضف لليوم</button>
+        <button class="btn secondary" type="button" data-import-food="${key}">حفظ</button>
+      </div>
     </article>
   `;
 }
@@ -1297,10 +1354,11 @@ function saveManualImportedFood(event) {
 function renderAdd() {
   document.querySelector("#add").innerHTML = `
     <div class="split-title"><h2>إضافة</h2><span class="pill info">إجراء سريع</span></div>
-    <p class="section-kicker">ثلاثة مسارات فقط: وجبة، كارديو، قياس. بدون بحث طويل.</p>
+    <p class="section-kicker">المسارات اليومية الأساسية: وجبة، كارديو، مقاومة، قياس. بدون بحث طويل.</p>
     <section class="quick-actions">
       <button class="quick-action" data-view="food-log" type="button"><span>${icon("utensils")}</span>وجبة</button>
       <button class="quick-action secondary" data-action="focus-cardio" type="button"><span>${icon("cardio")}</span>كارديو</button>
+      <button class="quick-action secondary" data-action="toggle-resistance" type="button"><span>${icon("target")}</span>مقاومة</button>
       <button class="quick-action secondary" data-action="focus-weight" type="button"><span>${icon("scale")}</span>وزن</button>
     </section>
 
@@ -1702,6 +1760,22 @@ function saveCardio(event) {
   render();
 }
 
+function toggleResistance(dateISO = activeDate) {
+  const current = dayResistance(dateISO);
+  if (current) {
+    state.resistanceLogs = (state.resistanceLogs || []).filter((entry) => entry.id !== current.id);
+  } else {
+    state.resistanceLogs = (state.resistanceLogs || []).filter((entry) => entry.date !== dateISO).concat({
+      id: crypto.randomUUID(),
+      date: dateISO,
+      done: true,
+      type: "تمرين مقاومة",
+      notes: "",
+    });
+  }
+  render();
+}
+
 function renderSettings() {
   const s = state.settings;
   document.querySelector("#settings").innerHTML = `
@@ -1849,7 +1923,7 @@ function generateAIReport() {
     const food = dayFood(date);
     const cardio = dayCardio(date);
     const insight = dayInsight(date);
-    return `- ${date}: سعرات ${formatNumber(food.calories)}, بروتين ${formatNumber(food.protein)}g, كارب ${formatNumber(food.carbs)}g, دهون ${formatNumber(food.fat)}g, كارديو ${formatNumber(cardio)} cal, الحالة: ${insight.issues.join(" / ")}`;
+    return `- ${date}: سعرات ${formatNumber(food.calories)}, بروتين ${formatNumber(food.protein)}g, كارب ${formatNumber(food.carbs)}g, دهون ${formatNumber(food.fat)}g, كارديو ${formatNumber(cardio)} cal, مقاومة: ${dayResistance(date) ? "نعم" : "لا"}, الحالة: ${insight.issues.join(" / ")}`;
   }).join("\n");
   const mealsToday = state.foodLogs
     .filter((entry) => entry.date === activeDate)
@@ -1877,6 +1951,7 @@ function generateAIReport() {
 - الكارب: ${formatNumber(today.carbs)}g
 - الدهون: ${formatNumber(today.fat)}g
 - الكارديو: ${formatNumber(dayCardio())} cal
+- تمرين مقاومة: ${dayResistance() ? "نعم" : "لا"}
 - العجز التقريبي: ${formatNumber(dayDeficit())}
 
 وجبات اليوم:
@@ -1886,6 +1961,7 @@ ${mealsToday}
 - أيام الالتزام: ${adherence} / 7
 - إجمالي السعرات المأكولة: ${formatNumber(week.actualCalories)}
 - إجمالي الكارديو: ${formatNumber(week.cardio)} cal
+- جلسات المقاومة: ${resistanceSessionsThisWeek()}
 - العجز الأسبوعي التقريبي: ${formatNumber(week.deficit)}
 - متوسط البروتين: ${formatNumber(weekProteinAverage())}g
 
@@ -1990,6 +2066,8 @@ function aiContext() {
     settings: state.settings,
     today: dayFood(),
     cardioToday: dayCardio(),
+    resistanceToday: Boolean(dayResistance()),
+    resistanceThisWeek: resistanceSessionsThisWeek(),
     dailyDeficit: dayDeficit(),
     week,
     latestProgress: logs.at(-1) || null,
@@ -2001,16 +2079,23 @@ function aiContext() {
 function renderAICoach() {
   const today = dayFood();
   const decision = dailyDecision(today, dayCardio());
+  const hasOpenAIKey = Boolean(localStorage.getItem("OPENAI_API_KEY"));
   document.querySelector("#ai-coach").innerHTML = `
     <div class="split-title"><h2>المدرب الذكي</h2><span class="pill info">تحليل التغذية</span></div>
     <section class="ai-command">
       <div>
-        <span class="hero-label">اقتراح سريع</span>
+        <span class="hero-label">${hasOpenAIKey ? "ChatGPT متصل" : "تحليل محلي"}</span>
         <h3>${decision.title}</h3>
         <p>${decision.text}</p>
       </div>
-      <button class="command-button" type="button" data-ai-task="dailyCoach">حلل يومي</button>
+      <button class="command-button" type="button" data-ai-task="dailyCoach">${hasOpenAIKey ? "حلل بـ ChatGPT" : "حلل يومي"}</button>
     </section>
+    ${hasOpenAIKey ? "" : `
+      <section class="alert warn">
+        يعمل المدرب الآن بوضع محلي مختصر. لإجابات أذكى، أضف مفتاح OpenAI من مركز التحكم.
+        <button class="btn secondary inline-action" type="button" data-action="focus-api-settings">ربط ChatGPT</button>
+      </section>
+    `}
     <section class="coach-command-grid">
       <button class="quick-action" data-ai-task="dailyCoach" type="button"><span>${icon("coach")}</span>قرار اليوم</button>
       <button class="quick-action secondary" data-ai-task="weeklyAnalysis" type="button"><span>${icon("trending")}</span>تحليل الأسبوع</button>
@@ -2185,6 +2270,7 @@ function isCommandButton(target) {
     "deleteCardio",
     "restoreSnapshot",
     "setDate",
+    "addImportedToday",
   ];
   return commandKeys.some((key) => target.dataset[key] !== undefined);
 }
@@ -2244,6 +2330,10 @@ function handleAction(target) {
     requestAnimationFrame(() => document.querySelector("#addProgressForm")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     return;
   }
+  if (action === "toggle-resistance") {
+    toggleResistance();
+    return;
+  }
   if (action === "focus-api-settings") {
     const details = document.querySelector("#apiSettings");
     if (details) details.open = true;
@@ -2280,11 +2370,18 @@ function handleAction(target) {
     if (original) state.foodLogs.push({ ...original, id: crypto.randomUUID(), date: activeDate });
   }
   if (target.dataset.importFood) {
-    const item = usdaResults.find((result) => String(result.fdcId || result.name) === String(target.dataset.importFood));
+    const item = findImportedFood(target.dataset.importFood);
     if (item) {
       state.foods.push(foodFromExternal(item));
       render();
       setView("food-log");
+      return;
+    }
+  }
+  if (target.dataset.addImportedToday) {
+    const item = findImportedFood(target.dataset.addImportedToday);
+    if (item) {
+      addImportedFoodToToday(item);
       return;
     }
   }
