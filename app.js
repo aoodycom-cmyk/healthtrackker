@@ -11,7 +11,7 @@ const defaultState = {
     proteinGoal: 180,
     carbsGoal: 210,
     fatGoal: 65,
-    weekStartsOn: 6,
+    weekStartsOn: 0,
     goalWeight: 78,
     goalWaist: 84,
     minProtein: 170,
@@ -397,6 +397,21 @@ function weekStats(dateISO = activeDate) {
   return { dates, actualCalories, cardio, deficit };
 }
 
+function weekCardioProgress(dateISO = activeDate) {
+  const week = weekStats(dateISO);
+  const goal = Math.max(0, Number(state.settings.weeklyCardioGoal) || 0);
+  const remaining = Math.max(0, goal - week.cardio);
+  const extra = Math.max(0, week.cardio - goal);
+  return {
+    ...week,
+    goal,
+    remaining,
+    extra,
+    start: week.dates[0],
+    end: week.dates[6],
+  };
+}
+
 function compliance(actual, target, inverse = false) {
   if (!target) return 0;
   const ratio = inverse ? target / Math.max(actual, 1) : actual / target;
@@ -545,11 +560,11 @@ function dashboardStatus(food) {
   return { type: "good", label: "ممتاز", text: "السعرات تحت السيطرة والبروتين قريب من الخطة.", headline: "يوم متوازن" };
 }
 
-function dailyDecision(food, cardio) {
+function dailyDecision(food, cardioWeek) {
   const remainingCalories = state.settings.targetCalories - food.calories;
   const proteinLeft = Math.max(0, state.settings.proteinGoal - food.protein);
   const minProteinLeft = Math.max(0, state.settings.minProtein - food.protein);
-  const cardioLeft = Math.max(0, (state.settings.weeklyCardioGoal / 7) - cardio);
+  const cardioLeft = cardioWeek.remaining;
   if (food.calories === 0) {
     return {
       tone: "info",
@@ -580,8 +595,8 @@ function dailyDecision(food, cardio) {
   if (cardioLeft > 0 && food.calories > state.settings.targetCalories * 0.75) {
     return {
       tone: "info",
-      title: `باقي ${formatNumber(cardioLeft)} سعرة كارديو`,
-      text: "الغذاء مضبوط تقريباً. جلسة قصيرة تثبت العجز الأسبوعي.",
+      title: `باقي ${formatNumber(cardioLeft)} سعرة كارديو هذا الأسبوع`,
+      text: `خلصت ${formatNumber(cardioWeek.cardio)} من هدف ${formatNumber(cardioWeek.goal)}. جلسة قصيرة تثبت العجز الأسبوعي.`,
       primary: "سجل كارديو",
       secondary: "راجع الأسبوع",
     };
@@ -610,11 +625,11 @@ function ring(value) {
 
 function renderDashboard() {
   const food = dayFood();
-  const cardio = dayCardio();
+  const cardioWeek = weekCardioProgress();
   const dailyDeficit = dayDeficit();
   const remaining = state.settings.targetCalories - food.calories;
   const status = dashboardStatus(food);
-  const decision = dailyDecision(food, cardio);
+  const decision = dailyDecision(food, cardioWeek);
   const calorieProgress = percent(food.calories, state.settings.targetCalories);
   const latest = latestProgressDelta();
   const scores = dailyScores();
@@ -622,8 +637,10 @@ function renderDashboard() {
   const streak = adherenceStreak();
   const proteinLeft = Math.max(0, state.settings.proteinGoal - food.protein);
   const fatRoom = Math.max(0, state.settings.maxFat - food.fat);
-  const cardioGoal = Math.max(state.settings.weeklyCardioGoal / 7, 1);
-  const cardioLeft = Math.max(0, cardioGoal - cardio);
+  const cardioGoal = Math.max(cardioWeek.goal, 1);
+  const cardioFoot = cardioWeek.remaining > 0
+    ? `باقي ${formatNumber(cardioWeek.remaining)} هذا الأسبوع`
+    : `مكتمل${cardioWeek.extra ? ` +${formatNumber(cardioWeek.extra)}` : ""}`;
   const resistance = dayResistance();
 
   document.querySelector("#dashboard").innerHTML = `
@@ -675,7 +692,7 @@ function renderDashboard() {
         ${macroCard("protein", "البروتين", food.protein, state.settings.proteinGoal, "g", "protein", `باقي ${formatNumber(proteinLeft)}g`)}
         ${macroCard("carbs", "الكارب", food.carbs, state.settings.carbsGoal, "g", "carbs", `هدف ${formatNumber(state.settings.carbsGoal)}g`)}
         ${macroCard("fat", "الدهون", food.fat, state.settings.fatGoal, "g", "fat", `متاح ${formatNumber(fatRoom)}g`)}
-        ${macroCard("cardio", "الكارديو", cardio, cardioGoal, "سعرة", "cardio", `باقي ${formatNumber(cardioLeft)}`)}
+        ${macroCard("cardio", "كارديو الأسبوع", cardioWeek.cardio, cardioGoal, "سعرة", "cardio", cardioFoot)}
       </section>
     </div>
     ${activeDashboardInsight ? renderComplianceInsight(activeDashboardInsight) : ""}
@@ -842,14 +859,18 @@ function weeklyMini(label, value, note = "", insight = "") {
 
 function renderWeeklySummary() {
   const week = weekStats();
+  const cardioWeek = weekCardioProgress();
   const averageCalories = week.actualCalories / 7;
+  const cardioNote = cardioWeek.remaining > 0
+    ? `${cardioSessionsThisWeek()} جلسات · باقي ${formatNumber(cardioWeek.remaining)}`
+    : `${cardioSessionsThisWeek()} جلسات · مكتمل`;
   return `
     <div class="section-title"><h2>ملخص الأسبوع</h2><span class="pill good">${formatNumber(week.deficit)} عجز</span></div>
     <section class="weekly-strip">
       ${weeklyMini("العجز الأسبوعي", formatNumber(week.deficit), "سعرة", "calories")}
       ${weeklyMini("متوسط السعرات", formatNumber(averageCalories), "يومياً", "calories")}
       ${weeklyMini("أيام الالتزام", `${adherenceDays()} / 7`, "اضغط للتفاصيل", "consistency")}
-      ${weeklyMini("جلسات الكارديو", cardioSessionsThisWeek(), `${formatNumber(week.cardio)} سعرة`, "cardio")}
+      ${weeklyMini("كارديو الأسبوع", `${formatNumber(cardioWeek.cardio)} / ${formatNumber(cardioWeek.goal)}`, cardioNote, "cardio")}
       ${weeklyMini("تمارين المقاومة", resistanceSessionsThisWeek(), "هذا الأسبوع", "consistency")}
       ${weeklyMini("متوسط البروتين", `${formatNumber(weekProteinAverage())} g`, "يومياً", "protein")}
     </section>
@@ -880,6 +901,7 @@ function dayInsight(dateISO) {
 function insightVerdict(type, balances, rows) {
   const missedDays = rows.filter((row) => !row.logged).length;
   const badDays = rows.filter((row) => row.logged && !row.ok).length;
+  const cardioWeek = weekCardioProgress();
   const maps = {
     calories: {
       title: balances.calorieBalance >= 0 ? "السعرات تحت السيطرة" : `تحتاج تعويض ${formatNumber(Math.abs(balances.calorieBalance))} سعرة`,
@@ -903,9 +925,9 @@ function insightVerdict(type, balances, rows) {
       action: "اجعل الوجبة القادمة بروتين وكارب خفيف.",
     },
     cardio: {
-      title: `${formatNumber(weekStats().cardio)} سعرة كارديو هذا الأسبوع`,
-      text: "الكارديو هنا يعوض السعرات ويدعم العجز، لكنه لا يغني عن ضبط الوجبات.",
-      action: "سجل جلسة قصيرة عند وجود زيادة سعرات.",
+      title: cardioWeek.remaining > 0 ? `باقي ${formatNumber(cardioWeek.remaining)} سعرة كارديو` : "هدف الكارديو الأسبوعي مكتمل",
+      text: `الأسبوع الحالي من ${dayLabel(cardioWeek.start)} إلى ${dayLabel(cardioWeek.end)}. أنجزت ${formatNumber(cardioWeek.cardio)} من ${formatNumber(cardioWeek.goal)} سعرة.`,
+      action: cardioWeek.remaining > 0 ? "سجل جلسة كارديو قبل نهاية الأسبوع." : "حافظ على نفس الإيقاع للأسبوع القادم.",
     },
     nutrition: {
       title: badDays ? `${badDays} أيام تحتاج مراجعة` : "تغذيتك مرتبة",
@@ -923,6 +945,7 @@ function insightVerdict(type, balances, rows) {
 
 function renderComplianceInsight(type = "consistency") {
   const dates = getWeekDates();
+  const cardioWeek = weekCardioProgress();
   const rows = dates.map(dayInsight);
   const loggedRows = rows.filter((row) => row.logged);
   const calorieBalance = loggedRows.reduce((sum, row) => sum + row.calorieDelta, 0);
@@ -948,6 +971,9 @@ function renderComplianceInsight(type = "consistency") {
   const fatAdvice = fatBalance >= 0
     ? `الدهون ضمن الحد في الأيام المسجلة.`
     : `الدهون زادت ${formatNumber(Math.abs(fatBalance))}g؛ خل وجباتك القادمة أخف صوص وزيوت.`;
+  const cardioAdvice = cardioWeek.remaining > 0
+    ? `باقي ${formatNumber(cardioWeek.remaining)} سعرة حتى هدف ${formatNumber(cardioWeek.goal)}.`
+    : `مكتمل${cardioWeek.extra ? ` وزيادة ${formatNumber(cardioWeek.extra)}` : ""}.`;
   return `
     <section class="panel insight-panel" id="dashboardInsight">
       <div class="split-title">
@@ -964,6 +990,7 @@ function renderComplianceInsight(type = "consistency") {
         ${metric("ميزان السعرات", `${calorieBalance >= 0 ? "+" : ""}${formatNumber(calorieBalance)}`, calorieAdvice)}
         ${metric("ميزان البروتين", `${proteinBalance >= 0 ? "+" : ""}${formatNumber(proteinBalance)}g`, proteinAdvice)}
         ${metric("ميزان الدهون", `${fatBalance >= 0 ? "+" : ""}${formatNumber(fatBalance)}g`, fatAdvice)}
+        ${metric("كارديو الأسبوع", `${formatNumber(cardioWeek.cardio)} / ${formatNumber(cardioWeek.goal)}`, cardioAdvice)}
       </div>
       <div class="list insight-days">
         ${rows.map((row) => `
