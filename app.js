@@ -17,6 +17,10 @@ const defaultState = {
     minProtein: 170,
     maxFat: 75,
     weeklyCardioGoal: 1800,
+    sex: "male",
+    age: 30,
+    heightCm: 170,
+    activityLevel: 1.35,
   },
   foods: [
     { id: crypto.randomUUID(), name: "صدر دجاج", category: "بروتين", calories: 165, protein: 31, carbs: 0, fat: 3.6, notes: "مطبوخ" },
@@ -35,9 +39,10 @@ const defaultState = {
   resistanceLogs: [],
   progressLogs: [],
   savedDays: [],
+  targetHistory: [],
 };
 
-const stateCollections = ["foods", "sauces", "meals", "foodLogs", "cardioLogs", "resistanceLogs", "progressLogs", "savedDays"];
+const stateCollections = ["foods", "sauces", "meals", "foodLogs", "cardioLogs", "resistanceLogs", "progressLogs", "savedDays", "targetHistory"];
 
 let state = loadState();
 let activeDate = todayISO();
@@ -284,7 +289,11 @@ function compactLocalStorage() {
 
 function normalizeSettings(settings = {}) {
   return Object.fromEntries(
-    Object.entries(defaultState.settings).map(([key, defaultValue]) => [key, finiteSetting(settings[key], defaultValue)])
+    Object.entries(defaultState.settings).map(([key, defaultValue]) => {
+      if (typeof defaultValue === "number") return [key, finiteSetting(settings[key], defaultValue)];
+      const value = settings[key];
+      return [key, value === undefined || value === null || String(value).trim() === "" ? defaultValue : value];
+    })
   );
 }
 
@@ -321,59 +330,27 @@ function getWeekDates(dateISO = activeDate) {
 }
 
 function macroFromItem(item, grams) {
-  const factor = Number(grams || 0) / 100;
-  return {
-    calories: (Number(item?.calories) || 0) * factor,
-    protein: (Number(item?.protein) || 0) * factor,
-    carbs: (Number(item?.carbs) || 0) * factor,
-    fat: (Number(item?.fat) || 0) * factor,
-  };
+  return window.NutritionCalculationEngine.macroFromItem(item, grams);
 }
 
 function addMacros(items) {
-  return items.reduce((sum, item) => ({
-    calories: sum.calories + (Number(item.calories) || 0),
-    protein: sum.protein + (Number(item.protein) || 0),
-    carbs: sum.carbs + (Number(item.carbs) || 0),
-    fat: sum.fat + (Number(item.fat) || 0),
-  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  return window.NutritionCalculationEngine.addMacros(items);
 }
 
 function mealMacros(meal, grams = 100) {
-  const base = addMacros((meal.components || []).map((component) => {
-    const source = component.type === "sauce"
-      ? state.sauces.find((item) => item.id === component.itemId)
-      : state.foods.find((item) => item.id === component.itemId);
-    return macroFromItem(source, component.grams);
-  }));
-  const totalGrams = (meal.components || []).reduce((sum, item) => sum + Number(item.grams || 0), 0) || 100;
-  const factor = Number(grams || 0) / totalGrams;
-  return {
-    calories: base.calories * factor,
-    protein: base.protein * factor,
-    carbs: base.carbs * factor,
-    fat: base.fat * factor,
-  };
+  return window.NutritionCalculationEngine.mealMacros(state, meal, grams);
 }
 
 function entryMacros(entry) {
-  const source = entry.sourceType === "meal"
-    ? state.meals.find((item) => item.id === entry.itemId)
-    : state.foods.find((item) => item.id === entry.itemId);
-  const main = entry.sourceType === "meal" ? mealMacros(source, entry.grams) : macroFromItem(source, entry.grams);
-  const sauce = state.sauces.find((item) => item.id === entry.sauceId);
-  return addMacros([main, macroFromItem(sauce, entry.sauceGrams)]);
+  return window.NutritionCalculationEngine.entryMacros(state, entry);
 }
 
 function dayFood(dateISO = activeDate) {
-  const entries = state.foodLogs.filter((entry) => entry.date === dateISO);
-  return addMacros(entries.map(entryMacros));
+  return window.NutritionCalculationEngine.dayFood(state, dateISO, todayISO());
 }
 
 function dayCardio(dateISO = activeDate) {
-  return state.cardioLogs
-    .filter((entry) => entry.date === dateISO)
-    .reduce((sum, entry) => sum + Number(entry.calories || 0), 0);
+  return window.NutritionCalculationEngine.dayCardio(state, dateISO, todayISO());
 }
 
 function dayResistance(dateISO = activeDate) {
@@ -386,7 +363,8 @@ function resistanceSessionsThisWeek() {
 }
 
 function dayDeficit(dateISO = activeDate) {
-  return state.settings.maintenance - dayFood(dateISO).calories + dayCardio(dateISO);
+  const report = window.NutritionCalculationEngine.dailyReport(state, dateISO, todayISO());
+  return report.deficit.finalDailyDeficit ?? report.deficit.estimatedIfTarget;
 }
 
 function weekStats(dateISO = activeDate) {
@@ -425,6 +403,22 @@ function statusClass({ calories, protein, fat }) {
   if (over || lowProtein || highFat) return "bad";
   if (state.settings.targetCalories - calories < 180 || protein < state.settings.proteinGoal) return "warn";
   return "good";
+}
+
+function analyticsReports(dateISO = activeDate) {
+  return window.NutritionReportingEngine.createReports(state, dateISO, todayISO());
+}
+
+function analyticsExportText(dateISO = activeDate) {
+  return window.NutritionReportingEngine.cleanAIExport(state, dateISO, todayISO());
+}
+
+function reportNumber(value, digits = 0) {
+  return window.NutritionReportingEngine.n(value, digits);
+}
+
+function reportPercent(value) {
+  return window.NutritionReportingEngine.pct(value);
 }
 
 function render() {
@@ -626,7 +620,9 @@ function ring(value) {
 function renderDashboard() {
   const food = dayFood();
   const cardioWeek = weekCardioProgress();
-  const dailyDeficit = dayDeficit();
+  const dailyAnalytics = analyticsReports().daily;
+  const dailyDeficit = dailyAnalytics.deficit.finalDailyDeficit ?? dailyAnalytics.deficit.estimatedIfTarget;
+  const deficitLabel = dailyAnalytics.deficit.finalDailyDeficit === null ? "العجز المتوقع" : "العجز النهائي";
   const remaining = state.settings.targetCalories - food.calories;
   const status = dashboardStatus(food);
   const decision = dailyDecision(food, cardioWeek);
@@ -683,7 +679,7 @@ function renderDashboard() {
         <p class="compact-note">${status.text}</p>
         <div class="hero-meta">
           <div><small>تبقى</small><strong>${formatNumber(remaining)} سعرة</strong></div>
-          <div><small>العجز اليوم</small><strong>${formatNumber(dailyDeficit)}</strong></div>
+          <div><small>${deficitLabel}</small><strong>${formatNumber(dailyDeficit)}</strong></div>
         </div>
         <span class="tap-hint">اضغط للتفاصيل</span>
       </button>
@@ -719,6 +715,8 @@ function renderDashboard() {
     </section>
 
     ${renderWeeklySummary()}
+
+    ${renderAnalyticsOverview()}
 
     <div class="section-title"><h2>الرسوم السريعة</h2><span class="pill">آخر 7 أيام</span></div>
     <section class="chart-row">
@@ -830,14 +828,17 @@ function coachMessage() {
 
 function drawDashboardCharts() {
   const dates = getWeekDates();
-  drawChart("deficitChart", dates.map((date) => ({ label: date.slice(5), value: dayDeficit(date) })), "#34d399");
-  drawChart("cardioChart", dates.map((date) => ({ label: date.slice(5), value: dayCardio(date) })), "#f59e0b");
+  const nutritionDays = window.NutritionCalculationEngine.periodNutrition(state, dates, todayISO()).daily;
+  const cardioDays = window.NutritionCalculationEngine.periodCardio(state, dates, todayISO()).daily.filter((item) => item.calories > 0);
+  drawChart("deficitChart", nutritionDays.map((item) => ({ label: item.date.slice(5), value: dayDeficit(item.date) })), "#34d399");
+  drawChart("cardioChart", cardioDays.map((item) => ({ label: item.date.slice(5), value: item.calories })), "#f59e0b");
 }
 
 function adherenceDays() {
   return getWeekDates().filter((date) => {
     const food = dayFood(date);
-    return food.calories > 0 && food.calories <= state.settings.targetCalories && food.protein >= state.settings.minProtein;
+    const settings = window.NutritionCalculationEngine.settingsForDate(state, date);
+    return food.calories > 0 && food.calories <= settings.targetCalories && food.protein >= settings.minProtein;
   }).length;
 }
 
@@ -877,6 +878,23 @@ function renderWeeklySummary() {
   `;
 }
 
+function renderAnalyticsOverview() {
+  const { daily, weekly, monthly } = analyticsReports();
+  const deficitNow = daily.deficit.estimatedIfStopsNow;
+  const deficitTarget = daily.deficit.estimatedIfTarget;
+  return `
+    <div class="section-title"><h2>محرك التحليل</h2><span class="pill info">محلي 100%</span></div>
+    <section class="weekly-strip analytics-strip">
+      ${weeklyMini("BMR", reportNumber(daily.goals.bmr), "سعرة راحة")}
+      ${weeklyMini("Estimated TDEE", reportNumber(daily.goals.estimatedTDEE), `${reportPercent(daily.goals.tdeeConfidence)} ثقة`)}
+      ${weeklyMini("فرق TDEE", reportNumber(daily.goals.tdeeDifference), `السابق ${reportNumber(daily.goals.previousTDEE)}`)}
+      ${weeklyMini("عجز لو توقفت الآن", reportNumber(deficitNow), "تقديري قبل نهاية اليوم")}
+      ${weeklyMini("عجز عند الهدف", reportNumber(deficitTarget), "إذا وصلت السعرات")}
+      ${weeklyMini("Compliance الشهري", reportPercent(monthly.compliance), `الأسبوع ${reportPercent(weekly.scores.overall)}`)}
+    </section>
+  `;
+}
+
 function dayLabel(dateISO) {
   return new Date(`${dateISO}T12:00:00`).toLocaleDateString("ar-SA", { weekday: "long", month: "short", day: "numeric" });
 }
@@ -884,10 +902,11 @@ function dayLabel(dateISO) {
 function dayInsight(dateISO) {
   const food = dayFood(dateISO);
   const cardio = dayCardio(dateISO);
+  const settings = window.NutritionCalculationEngine.settingsForDate(state, dateISO);
   const logged = food.calories > 0 || cardio > 0;
-  const calorieDelta = state.settings.targetCalories - food.calories;
-  const proteinDelta = food.protein - state.settings.minProtein;
-  const fatDelta = state.settings.maxFat - food.fat;
+  const calorieDelta = settings.targetCalories - food.calories;
+  const proteinDelta = food.protein - settings.minProtein;
+  const fatDelta = settings.maxFat - food.fat;
   const ok = logged && calorieDelta >= 0 && proteinDelta >= 0 && fatDelta >= 0;
   const issues = [];
   if (!logged) issues.push("غير مسجل");
@@ -1677,18 +1696,24 @@ function renderProgress() {
       <article class="chart-card"><h3>وزني</h3><canvas class="chart" id="weightChart"></canvas></article>
       <article class="chart-card"><h3>خصري</h3><canvas class="chart" id="waistChart"></canvas></article>
       <article class="chart-card"><h3>العجز</h3><canvas class="chart" id="progressDeficitChart"></canvas></article>
-      <article class="chart-card"><h3>الكارديو</h3><canvas class="chart" id="progressCardioChart"></canvas></article>
-      <article class="chart-card"><h3>المتوسط الأسبوعي</h3><canvas class="chart" id="weeklyAverageChart"></canvas></article>
+      <article class="chart-card"><h3>الكارديو الشهري</h3><canvas class="chart" id="progressCardioChart"></canvas></article>
+      <article class="chart-card"><h3>السعرات الشهرية</h3><canvas class="chart" id="monthlyCaloriesChart"></canvas></article>
+      <article class="chart-card"><h3>البروتين الشهري</h3><canvas class="chart" id="monthlyProteinChart"></canvas></article>
     </div>
     <div class="list">${logs.slice().reverse().map(renderProgressItem).join("") || `<div class="list-item"><p class="item-meta">لا توجد قياسات بعد.</p></div>`}</div>
   `;
   document.querySelector("#progressForm")?.addEventListener("submit", saveProgress);
   drawChart("weightChart", logs.map((item) => ({ label: item.date.slice(5), value: item.weight })), "#2563eb");
   drawChart("waistChart", logs.map((item) => ({ label: item.date.slice(5), value: item.waist })), "#0f766e");
-  const dates = getWeekDates();
-  drawChart("progressDeficitChart", dates.map((date) => ({ label: date.slice(5), value: dayDeficit(date) })), "#34d399");
-  drawChart("progressCardioChart", dates.map((date) => ({ label: date.slice(5), value: dayCardio(date) })), "#f59e0b");
-  drawChart("weeklyAverageChart", dates.map((date) => ({ label: date.slice(5), value: dayFood(date).calories })), "#a78bfa");
+  const weekDates = getWeekDates();
+  const monthDates = window.NutritionCalculationEngine.getMonthDates(activeDate, todayISO());
+  const weekNutritionDays = window.NutritionCalculationEngine.periodNutrition(state, weekDates, todayISO()).daily;
+  const monthNutritionDays = window.NutritionCalculationEngine.periodNutrition(state, monthDates, todayISO()).daily;
+  const monthCardioDays = window.NutritionCalculationEngine.periodCardio(state, monthDates, todayISO()).daily.filter((item) => item.calories > 0);
+  drawChart("progressDeficitChart", weekNutritionDays.map((item) => ({ label: item.date.slice(5), value: dayDeficit(item.date) })), "#34d399");
+  drawChart("progressCardioChart", monthCardioDays.map((item) => ({ label: item.date.slice(5), value: item.calories })), "#f59e0b");
+  drawChart("monthlyCaloriesChart", monthNutritionDays.map((item) => ({ label: item.date.slice(5), value: item.food.calories })), "#a78bfa");
+  drawChart("monthlyProteinChart", monthNutritionDays.map((item) => ({ label: item.date.slice(5), value: item.food.protein })), "#34d399");
 }
 
 function bestProgressWeek() {
@@ -1835,6 +1860,20 @@ function renderSettings() {
             ${settingInput("minProtein", "الحد الأدنى للبروتين", s.minProtein)}
             ${settingInput("maxFat", "الحد الأعلى للدهون", s.maxFat)}
             ${settingInput("weeklyCardioGoal", "هدف الكارديو الأسبوعي", s.weeklyCardioGoal)}
+            ${settingInput("age", "العمر", s.age)}
+            ${settingInput("heightCm", "الطول بالسنتيمتر", s.heightCm)}
+            <div class="field"><label>الجنس</label><select class="select" name="sex">
+              ${[["male", "ذكر"], ["female", "أنثى"]].map(([value, label]) => `<option value="${value}" ${s.sex === value ? "selected" : ""}>${label}</option>`).join("")}
+            </select></div>
+            <div class="field"><label>مستوى النشاط</label><select class="select" name="activityLevel">
+              ${[
+                [1.2, "قليل الحركة"],
+                [1.35, "نشاط خفيف"],
+                [1.5, "متوسط"],
+                [1.7, "نشط"],
+                [1.9, "رياضي عالي"],
+              ].map(([value, label]) => `<option value="${value}" ${Number(s.activityLevel) === Number(value) ? "selected" : ""}>${label}</option>`).join("")}
+            </select></div>
             <div class="field"><label>بداية الأسبوع</label><select class="select" name="weekStartsOn">
               ${["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"].map((day, index) => `<option value="${index}" ${Number(s.weekStartsOn) === index ? "selected" : ""}>${day}</option>`).join("")}
             </select></div>
@@ -1851,6 +1890,11 @@ function renderSettings() {
       <details class="panel details-card">
         <summary>تقرير للذكاء الاصطناعي</summary>
         ${aiReportTools()}
+      </details>
+
+      <details class="panel details-card">
+        <summary>تقارير التحليل الاحترافي</summary>
+        ${analyticsReportTools()}
       </details>
 
       <details class="panel details-card">
@@ -1953,79 +1997,91 @@ function aiReportTools() {
   `;
 }
 
+function analyticsReportTools() {
+  const { daily, weekly, monthly } = analyticsReports();
+  const trend = window.NutritionReportingEngine.trendArabic;
+  const weeklyNotes = window.NutritionReportingEngine.explainWeeklyDifference(weekly);
+  const weeklyCoachNotes = window.NutritionReportingEngine.weeklyCoach(weekly);
+  return `
+    <div class="subform analytics-report">
+      <div class="section-title"><h2>التقرير اليومي</h2><span class="pill info">${activeDate}</span></div>
+      <section class="metrics-grid">
+        ${metric("سعرات المحافظة", reportNumber(daily.goals.maintenanceCalories), "إعدادك الحالي")}
+        ${metric("Estimated TDEE", reportNumber(daily.goals.estimatedTDEE), `السابق ${reportNumber(daily.goals.previousTDEE)} · الفرق ${reportNumber(daily.goals.tdeeDifference)}`)}
+        ${metric("Confidence", reportPercent(daily.goals.tdeeConfidence), daily.tdee.method === "trend_blend" ? "مبني على الترند" : "معادلة + نشاط")}
+        ${metric("BMR", reportNumber(daily.goals.bmr), "Mifflin-St Jeor")}
+        ${metric("السعرات المستهدفة", reportNumber(daily.goals.targetCalories), `باقي ${reportNumber(daily.summary.caloriesRemaining)}`)}
+        ${metric("البروتين", `${reportNumber(daily.summary.protein)} / ${reportNumber(daily.goals.proteinTarget)}g`, `الحد الأدنى ${reportNumber(daily.goals.proteinMinimum)}g`)}
+        ${metric("الكارب", `${reportNumber(daily.summary.carbs)} / ${reportNumber(daily.goals.carbTarget)}g`, `توزيع ${reportPercent(daily.macroDistribution.carbs)}`)}
+        ${metric("الدهون", `${reportNumber(daily.summary.fat)} / ${reportNumber(daily.goals.fatTarget)}g`, `توزيع ${reportPercent(daily.macroDistribution.fat)}`)}
+        ${metric("الكارديو", reportNumber(daily.summary.cardio), `هدف الأسبوع ${reportNumber(daily.goals.weeklyCardioGoal)}`)}
+        ${metric("المقاومة", daily.summary.resistanceTraining ? "نعم" : "لا", "اليوم")}
+        ${metric("الوزن", daily.summary.weight ? `${reportNumber(daily.summary.weight, 1)} كجم` : "--", "آخر قياس حتى اليوم")}
+        ${metric("الخصر", daily.summary.waist ? `${reportNumber(daily.summary.waist, 1)} سم` : "--", "آخر قياس حتى اليوم")}
+      </section>
+
+      <div class="section-title"><h2>العجز الذكي</h2><span class="pill">لا يحسم اليوم قبل نهايته</span></div>
+      <section class="weekly-strip">
+        ${weeklyMini("باقي سعرات", reportNumber(daily.deficit.caloriesRemaining), "للوصول للهدف")}
+        ${weeklyMini("لو توقفت الآن", reportNumber(daily.deficit.estimatedIfStopsNow), "عجز تقديري")}
+        ${weeklyMini("لو وصلت الهدف", reportNumber(daily.deficit.estimatedIfTarget), "عجز تقديري")}
+        ${weeklyMini("العجز النهائي", daily.deficit.finalDailyDeficit === null ? "بعد نهاية اليوم" : reportNumber(daily.deficit.finalDailyDeficit), "لا يحسب مبكراً")}
+      </section>
+
+      <div class="section-title"><h2>الالتزام اليومي</h2><span class="pill good">${reportPercent(daily.adherence.overall)}</span></div>
+      <section class="weekly-strip">
+        ${weeklyMini("السعرات", reportPercent(daily.adherence.calories), "Adherence")}
+        ${weeklyMini("البروتين", reportPercent(daily.adherence.protein), "Adherence")}
+        ${weeklyMini("الكارب", reportPercent(daily.adherence.carbs), "Adherence")}
+        ${weeklyMini("الدهون", reportPercent(daily.adherence.fat), "Adherence")}
+        ${weeklyMini("الكارديو", reportPercent(daily.adherence.cardio), "Adherence")}
+        ${weeklyMini("التوزيع", `P ${reportPercent(daily.macroDistribution.protein)}`, `C ${reportPercent(daily.macroDistribution.carbs)} · F ${reportPercent(daily.macroDistribution.fat)}`)}
+      </section>
+
+      <div class="section-title"><h2>التقرير الأسبوعي</h2><span class="pill">${weekly.start || "--"} - ${weekly.end || "--"}</span></div>
+      <section class="metrics-grid">
+        ${metric("متوسط السعرات", reportNumber(weekly.averageCalories), `${weekly.loggedNutritionDays}/${weekly.periodDays} أيام مسجلة`)}
+        ${metric("متوسط البروتين", `${reportNumber(weekly.averageProtein)}g`, "الأيام المفقودة مستبعدة")}
+        ${metric("متوسط الكارب", `${reportNumber(weekly.averageCarbs)}g`, "الأيام المفقودة مستبعدة")}
+        ${metric("متوسط الدهون", `${reportNumber(weekly.averageFat)}g`, "الأيام المفقودة مستبعدة")}
+        ${metric("الكارديو", reportNumber(weekly.cardioTotal), `متوسط ${reportNumber(weekly.averageCardio)}`)}
+        ${metric("جلسات المقاومة", reportNumber(weekly.resistanceSessions), "هذا الأسبوع")}
+        ${metric("متوسط الوزن", `${reportNumber(weekly.averageWeight, 1)} كجم`, `تغير ${reportNumber(weekly.weightChange, 1)}`)}
+        ${metric("متوسط الخصر", `${reportNumber(weekly.averageWaist, 1)} سم`, `تغير ${reportNumber(weekly.waistChange, 1)}`)}
+        ${metric("Expected Fat Loss", `${reportNumber(weekly.expectedFatLoss, 2)} كجم`, "من العجز")}
+        ${metric("Estimated Fat Loss", `${reportNumber(weekly.estimatedFatLoss, 2)} كجم`, "من الميزان")}
+        ${metric("Overall Score", reportPercent(weekly.scores.overall), `Nutrition ${reportPercent(weekly.scores.nutrition)}`)}
+        ${metric("Trend", trend(weekly.trend.overall), `بروتين ${trend(weekly.trend.protein)} · كارديو ${trend(weekly.trend.cardio)}`)}
+      </section>
+      <div class="list">
+        ${weeklyNotes.concat(weeklyCoachNotes).map((note) => `<article class="list-item"><p class="item-meta">${note}</p></article>`).join("")}
+      </div>
+
+      <div class="section-title"><h2>التقرير الشهري</h2><span class="pill">${monthly.start || "--"} - ${monthly.end || "--"}</span></div>
+      <section class="metrics-grid">
+        ${metric("الوزن", `${reportNumber(monthly.startingWeight, 1)} → ${reportNumber(monthly.currentWeight, 1)}`, `المفقود ${monthly.weightChange === null ? "--" : reportNumber(-monthly.weightChange, 1)} كجم`)}
+        ${metric("الخصر", `${reportNumber(monthly.startingWaist, 1)} → ${reportNumber(monthly.currentWaist, 1)}`, `المفقود ${monthly.waistChange === null ? "--" : reportNumber(-monthly.waistChange, 1)} سم`)}
+        ${metric("متوسط السعرات", reportNumber(monthly.averageCalories), "شهري")}
+        ${metric("متوسط البروتين", `${reportNumber(monthly.averageProtein)}g`, "شهري")}
+        ${metric("متوسط الكارب", `${reportNumber(monthly.averageCarbs)}g`, "شهري")}
+        ${metric("متوسط الدهون", `${reportNumber(monthly.averageFat)}g`, "شهري")}
+        ${metric("متوسط الكارديو", reportNumber(monthly.averageCardio), `المجموع ${reportNumber(monthly.cardioTotal)}`)}
+        ${metric("المقاومة", reportNumber(monthly.resistanceSessions), "جلسات")}
+        ${metric("Estimated Fat Loss", `${reportNumber(monthly.estimatedFatLoss, 2)} كجم`, "شهري")}
+        ${metric("Muscle Preservation", reportPercent(monthly.estimatedMusclePreservation), "تقديري")}
+        ${metric("Compliance", reportPercent(monthly.compliance), "شهري")}
+        ${metric("Monthly Trend", trend(monthly.trend.overall), `وزن ${trend(monthly.trend.weight)} · خصر ${trend(monthly.trend.waist)}`)}
+      </section>
+    </div>
+  `;
+}
+
 function generateAIReport() {
-  const weekDates = getWeekDates();
-  const progressLogs = [...state.progressLogs].sort(byDate);
-  const latest = progressLogs.at(-1);
-  const previous = progressLogs.at(-2);
-  const week = weekStats();
-  const today = dayFood();
-  const adherence = adherenceDays();
-  const dayLines = weekDates.map((date) => {
-    const food = dayFood(date);
-    const cardio = dayCardio(date);
-    const insight = dayInsight(date);
-    return `- ${date}: سعرات ${formatNumber(food.calories)}, بروتين ${formatNumber(food.protein)}g, كارب ${formatNumber(food.carbs)}g, دهون ${formatNumber(food.fat)}g, كارديو ${formatNumber(cardio)} cal, مقاومة: ${dayResistance(date) ? "نعم" : "لا"}, الحالة: ${insight.issues.join(" / ")}`;
-  }).join("\n");
-  const mealsToday = state.foodLogs
-    .filter((entry) => entry.date === activeDate)
-    .map((entry) => {
-      const source = entry.sourceType === "meal" ? state.meals.find((item) => item.id === entry.itemId) : state.foods.find((item) => item.id === entry.itemId);
-      const macros = entryMacros(entry);
-      return `- ${entry.slot}: ${source?.name || "صنف محذوف"}، ${entry.grams}g، ${formatNumber(macros.calories)} سعرة، P ${formatNumber(macros.protein)}g / C ${formatNumber(macros.carbs)}g / F ${formatNumber(macros.fat)}g`;
-    }).join("\n") || "- لا توجد وجبات مسجلة اليوم.";
-  return `تقرير متابعة الجسم والتغذية
-التاريخ النشط: ${activeDate}
-
-الأهداف:
-- سعرات المحافظة: ${formatNumber(state.settings.maintenance)}
-- السعرات اليومية المستهدفة: ${formatNumber(state.settings.targetCalories)}
-- هدف البروتين: ${formatNumber(state.settings.proteinGoal)}g
-- الحد الأدنى للبروتين: ${formatNumber(state.settings.minProtein)}g
-- هدف الكارب: ${formatNumber(state.settings.carbsGoal)}g
-- هدف الدهون: ${formatNumber(state.settings.fatGoal)}g
-- حد الدهون الأعلى: ${formatNumber(state.settings.maxFat)}g
-- هدف الكارديو الأسبوعي: ${formatNumber(state.settings.weeklyCardioGoal)} cal
-
-اليوم:
-- السعرات: ${formatNumber(today.calories)} / ${formatNumber(state.settings.targetCalories)}
-- البروتين: ${formatNumber(today.protein)}g
-- الكارب: ${formatNumber(today.carbs)}g
-- الدهون: ${formatNumber(today.fat)}g
-- الكارديو: ${formatNumber(dayCardio())} cal
-- تمرين مقاومة: ${dayResistance() ? "نعم" : "لا"}
-- العجز التقريبي: ${formatNumber(dayDeficit())}
-
-وجبات اليوم:
-${mealsToday}
-
-ملخص الأسبوع:
-- أيام الالتزام: ${adherence} / 7
-- إجمالي السعرات المأكولة: ${formatNumber(week.actualCalories)}
-- إجمالي الكارديو: ${formatNumber(week.cardio)} cal
-- جلسات المقاومة: ${resistanceSessionsThisWeek()}
-- العجز الأسبوعي التقريبي: ${formatNumber(week.deficit)}
-- متوسط البروتين: ${formatNumber(weekProteinAverage())}g
-
-تفاصيل أيام الأسبوع:
-${dayLines}
-
-القياسات:
-- آخر وزن: ${latest?.weight ? `${latest.weight} kg` : "غير مسجل"}
-- آخر خصر: ${latest?.waist ? `${latest.waist} cm` : "غير مسجل"}
-- القياس السابق: ${previous ? `${previous.weight} kg، خصر ${previous.waist} cm بتاريخ ${previous.date}` : "غير متوفر"}
-
-المطلوب من التحليل:
-حلل الالتزام، اذكر أين النقص أو الزيادة، واقترح تعويضاً أسبوعياً عملياً للبروتين والسعرات والكارديو مع مراعاة خسارة الدهون والمحافظة على العضلات.`;
+  return analyticsExportText();
 }
 
 function exportBackup() {
-  const payload = {
-    app: "healthtrackker",
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    state: stripStoredPhotos(state),
-  };
+  const payload = window.NutritionStorageEngine.exportStatePayload(stripStoredPhotos(state));
   const raw = JSON.stringify(payload, null, 2);
   writeStateBackup(JSON.stringify(payload.state));
   const blob = new Blob([raw], { type: "application/json" });
@@ -2110,26 +2166,12 @@ function saveApiSettings(event) {
 }
 
 function aiContext() {
-  const week = weekStats();
-  const logs = [...state.progressLogs].sort(byDate);
-  return {
-    date: activeDate,
-    settings: state.settings,
-    today: dayFood(),
-    cardioToday: dayCardio(),
-    resistanceToday: Boolean(dayResistance()),
-    resistanceThisWeek: resistanceSessionsThisWeek(),
-    dailyDeficit: dayDeficit(),
-    week,
-    latestProgress: logs.at(-1) || null,
-    previousProgress: logs.at(-2) || null,
-    foodsLoggedToday: state.foodLogs.filter((entry) => entry.date === activeDate).map((entry) => ({ ...entry, macros: entryMacros(entry) })),
-  };
+  return window.NutritionAICoachingEngine.buildContext(state, activeDate, todayISO());
 }
 
 function renderAICoach() {
   const today = dayFood();
-  const decision = dailyDecision(today, dayCardio());
+  const decision = dailyDecision(today, weekCardioProgress());
   const hasOpenAIKey = Boolean(localStorage.getItem("OPENAI_API_KEY"));
   document.querySelector("#ai-coach").innerHTML = `
     <div class="split-title"><h2>المدرب الذكي</h2><span class="pill info">تحليل التغذية</span></div>
@@ -2209,8 +2251,11 @@ function saveSettings(event) {
   const nextSettings = { ...state.settings };
   Object.keys(defaultState.settings).forEach((key) => {
     if (!Object.prototype.hasOwnProperty.call(data, key)) return;
-    nextSettings[key] = finiteSetting(data[key], nextSettings[key]);
+    nextSettings[key] = typeof defaultState.settings[key] === "number"
+      ? finiteSetting(data[key], nextSettings[key])
+      : data[key];
   });
+  state.targetHistory = window.NutritionStorageEngine.ensureTargetHistory(state, nextSettings, activeDate);
   state.settings = normalizeSettings(nextSettings);
   compactLocalStorage();
   const settingsSaved = saveSettingsOnly(state.settings);
