@@ -421,6 +421,10 @@ function reportPercent(value) {
   return window.NutritionReportingEngine.pct(value);
 }
 
+function loggedMetric(isLogged, value, digits = 0, suffix = "") {
+  return isLogged ? `${reportNumber(value, digits)}${suffix}` : "غير مسجل";
+}
+
 function render() {
   renderDashboard();
   renderFoodLog();
@@ -2002,6 +2006,8 @@ function analyticsReportTools() {
   const trend = window.NutritionReportingEngine.trendArabic;
   const weeklyNotes = window.NutritionReportingEngine.explainWeeklyDifference(weekly);
   const weeklyCoachNotes = window.NutritionReportingEngine.weeklyCoach(weekly);
+  const nutritionLogged = daily.summary.nutritionLogged;
+  const cardioLogged = daily.summary.cardioLogged;
   return `
     <div class="subform analytics-report">
       <div class="section-title"><h2>التقرير اليومي</h2><span class="pill info">${activeDate}</span></div>
@@ -2011,10 +2017,11 @@ function analyticsReportTools() {
         ${metric("Confidence", reportPercent(daily.goals.tdeeConfidence), daily.tdee.method === "trend_blend" ? "مبني على الترند" : "معادلة + نشاط")}
         ${metric("BMR", reportNumber(daily.goals.bmr), "Mifflin-St Jeor")}
         ${metric("السعرات المستهدفة", reportNumber(daily.goals.targetCalories), `باقي ${reportNumber(daily.summary.caloriesRemaining)}`)}
-        ${metric("البروتين", `${reportNumber(daily.summary.protein)} / ${reportNumber(daily.goals.proteinTarget)}g`, `الحد الأدنى ${reportNumber(daily.goals.proteinMinimum)}g`)}
-        ${metric("الكارب", `${reportNumber(daily.summary.carbs)} / ${reportNumber(daily.goals.carbTarget)}g`, `توزيع ${reportPercent(daily.macroDistribution.carbs)}`)}
-        ${metric("الدهون", `${reportNumber(daily.summary.fat)} / ${reportNumber(daily.goals.fatTarget)}g`, `توزيع ${reportPercent(daily.macroDistribution.fat)}`)}
-        ${metric("الكارديو", reportNumber(daily.summary.cardio), `هدف الأسبوع ${reportNumber(daily.goals.weeklyCardioGoal)}`)}
+        ${metric("السعرات المسجلة", loggedMetric(nutritionLogged, daily.summary.caloriesConsumed), "اليوم")}
+        ${metric("البروتين", nutritionLogged ? `${reportNumber(daily.summary.protein)} / ${reportNumber(daily.goals.proteinTarget)}g` : "غير مسجل", `الحد الأدنى ${reportNumber(daily.goals.proteinMinimum)}g`)}
+        ${metric("الكارب", nutritionLogged ? `${reportNumber(daily.summary.carbs)} / ${reportNumber(daily.goals.carbTarget)}g` : "غير مسجل", nutritionLogged ? `توزيع ${reportPercent(daily.macroDistribution.carbs)}` : "لا يدخل في الالتزام")}
+        ${metric("الدهون", nutritionLogged ? `${reportNumber(daily.summary.fat)} / ${reportNumber(daily.goals.fatTarget)}g` : "غير مسجل", nutritionLogged ? `توزيع ${reportPercent(daily.macroDistribution.fat)}` : "لا يدخل في الالتزام")}
+        ${metric("الكارديو", loggedMetric(cardioLogged, daily.summary.cardio), `هدف الأسبوع ${reportNumber(daily.goals.weeklyCardioGoal)}`)}
         ${metric("المقاومة", daily.summary.resistanceTraining ? "نعم" : "لا", "اليوم")}
         ${metric("الوزن", daily.summary.weight ? `${reportNumber(daily.summary.weight, 1)} كجم` : "--", "آخر قياس حتى اليوم")}
         ${metric("الخصر", daily.summary.waist ? `${reportNumber(daily.summary.waist, 1)} سم` : "--", "آخر قياس حتى اليوم")}
@@ -2035,7 +2042,7 @@ function analyticsReportTools() {
         ${weeklyMini("الكارب", reportPercent(daily.adherence.carbs), "Adherence")}
         ${weeklyMini("الدهون", reportPercent(daily.adherence.fat), "Adherence")}
         ${weeklyMini("الكارديو", reportPercent(daily.adherence.cardio), "Adherence")}
-        ${weeklyMini("التوزيع", `P ${reportPercent(daily.macroDistribution.protein)}`, `C ${reportPercent(daily.macroDistribution.carbs)} · F ${reportPercent(daily.macroDistribution.fat)}`)}
+        ${weeklyMini("التوزيع", nutritionLogged ? `P ${reportPercent(daily.macroDistribution.protein)}` : "غير مسجل", nutritionLogged ? `C ${reportPercent(daily.macroDistribution.carbs)} · F ${reportPercent(daily.macroDistribution.fat)}` : "لا توجد وجبة")}
       </section>
 
       <div class="section-title"><h2>التقرير الأسبوعي</h2><span class="pill">${weekly.start || "--"} - ${weekly.end || "--"}</span></div>

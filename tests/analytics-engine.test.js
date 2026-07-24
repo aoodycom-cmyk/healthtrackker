@@ -89,6 +89,9 @@ near(week.averageWeight, 79.8);
 
 const daily = C.dailyReport(state, "2026-07-23", "2026-07-23");
 assert.equal(daily.deficit.finalDailyDeficit, null, "today should not have final deficit before day end");
+assert.equal(daily.summary.nutritionLogged, false);
+assert.equal(daily.adherence.calories, null, "unlogged nutrition should not receive calorie adherence");
+assert.equal(daily.adherence.fat, null, "unlogged nutrition should not receive fat adherence");
 assert.ok(Number.isFinite(daily.deficit.estimatedIfStopsNow));
 assert.ok(Number.isFinite(daily.goals.estimatedTDEE));
 assert.ok(Number.isFinite(daily.goals.bmr));
@@ -108,6 +111,8 @@ assert.ok(reports.weekly.scores.overall >= 0);
 const aiContext = globalThis.NutritionAICoachingEngine.buildContext(state, "2026-07-23", "2026-07-23");
 assert.ok(aiContext.cleanExport.includes("Do not recalculate"));
 assert.ok(aiContext.cleanExport.includes("BMR"));
+assert.ok(aiContext.cleanExport.includes("Calories Consumed: Not logged"));
+assert.ok(aiContext.cleanExport.includes("2026-07-23: Nutrition Not logged"));
 assert.ok(globalThis.NutritionAICoachingEngine.systemPrompt().includes("Never calculate"));
 
 console.log("analytics-engine tests passed");

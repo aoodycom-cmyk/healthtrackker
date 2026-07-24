@@ -160,6 +160,10 @@
     return (Array.isArray(state?.foodLogs) ? state.foodLogs : []).filter((entry) => entry.date === dateISO);
   }
 
+  function hasFoodLogged(state, dateISO, currentISO = todayISO()) {
+    return foodEntriesForDate(state, dateISO, currentISO).length > 0;
+  }
+
   function dayFood(state, dateISO, currentISO = todayISO()) {
     return addMacros(foodEntriesForDate(state, dateISO, currentISO).map((entry) => entryMacros(state, entry)));
   }
@@ -175,6 +179,11 @@
         seen.add(key);
         return total + toNumber(entry.calories);
       }, 0);
+  }
+
+  function hasCardioLogged(state, dateISO, currentISO = todayISO()) {
+    if (isFutureDate(dateISO, currentISO)) return false;
+    return (Array.isArray(state?.cardioLogs) ? state.cardioLogs : []).some((entry) => entry.date === dateISO);
   }
 
   function resistanceSessions(state, dates) {
@@ -367,6 +376,8 @@
     const future = isFutureDate(dateISO, currentISO);
     const settings = settingsForDate(state, dateISO);
     const tdee = estimateTDEE(state, dateISO, currentISO);
+    const nutritionLogged = !future && hasFoodLogged(state, dateISO, currentISO);
+    const cardioLogged = !future && hasCardioLogged(state, dateISO, currentISO);
     const food = future ? { calories: 0, protein: 0, carbs: 0, fat: 0 } : dayFood(state, dateISO, currentISO);
     const cardio = future ? 0 : dayCardio(state, dateISO, currentISO);
     const measurement = future ? null : latestMeasurementOnOrBefore(state, dateISO);
@@ -378,11 +389,11 @@
     const finalDailyDeficit = dateISO < currentISO ? estimatedIfStopsNow : null;
     const cardioDailyGoal = toNumber(settings.weeklyCardioGoal) / 7;
     const adherence = {
-      calories: adherencePercent(food.calories, settings.targetCalories, true),
-      protein: adherencePercent(food.protein, settings.proteinGoal),
-      carbs: adherencePercent(food.carbs, settings.carbsGoal),
-      fat: adherencePercent(food.fat, settings.fatGoal, true),
-      cardio: adherencePercent(cardio, cardioDailyGoal),
+      calories: nutritionLogged ? adherencePercent(food.calories, settings.targetCalories, true) : null,
+      protein: nutritionLogged ? adherencePercent(food.protein, settings.proteinGoal) : null,
+      carbs: nutritionLogged ? adherencePercent(food.carbs, settings.carbsGoal) : null,
+      fat: nutritionLogged ? adherencePercent(food.fat, settings.fatGoal, true) : null,
+      cardio: cardioLogged ? adherencePercent(cardio, cardioDailyGoal) : null,
     };
     adherence.overall = average(Object.values(adherence).filter((value) => value !== null)) || 0;
     return {
@@ -404,11 +415,13 @@
       },
       summary: {
         caloriesConsumed: food.calories,
+        nutritionLogged,
         caloriesRemaining,
         protein: food.protein,
         carbs: food.carbs,
         fat: food.fat,
         cardio,
+        cardioLogged,
         resistanceTraining: resistanceSessions(state, [dateISO]) > 0,
         weight: measurement?.weight || null,
         waist: measurement?.waist || null,
@@ -586,7 +599,9 @@
     entryMacros,
     addMacros,
     dayFood,
+    hasFoodLogged,
     dayCardio,
+    hasCardioLogged,
     resistanceSessions,
     measurementsForDates,
     latestMeasurementOnOrBefore,

@@ -10,6 +10,10 @@
     return value === null || value === undefined ? "--" : `${n(value)}%`;
   }
 
+  function loggedNumber(isLogged, value, digits = 0, suffix = "") {
+    return isLogged ? `${n(value, digits)}${suffix}` : "Not logged";
+  }
+
   function trendArabic(value) {
     const map = { improved: "تحسن", same: "ثابت", worse: "أسوأ" };
     return map[value] || "ثابت";
@@ -66,9 +70,15 @@
     const weeklyAdvice = weeklyCoach(weekly).map((item) => `- ${item}`).join("\n");
     const monthlyAdvice = monthlyCoach(monthly).map((item) => `- ${item}`).join("\n");
     const dailyLines = weekly.dates ? weekly.dates.map((date) => {
+      const nutritionLogged = C.hasFoodLogged(state, date, currentISO);
+      const cardioLogged = C.hasCardioLogged(state, date, currentISO);
       const food = C.dayFood(state, date, currentISO);
       const cardio = C.dayCardio(state, date, currentISO);
-      return `- ${date}: Calories ${n(food.calories)}, Protein ${n(food.protein)}g, Carbs ${n(food.carbs)}g, Fat ${n(food.fat)}g, Cardio ${n(cardio)}, Resistance ${C.resistanceSessions(state, [date]) ? "Yes" : "No"}`;
+      const nutritionText = nutritionLogged
+        ? `Calories ${n(food.calories)}, Protein ${n(food.protein)}g, Carbs ${n(food.carbs)}g, Fat ${n(food.fat)}g`
+        : "Nutrition Not logged";
+      const cardioText = cardioLogged ? n(cardio) : "Not logged";
+      return `- ${date}: ${nutritionText}, Cardio ${cardioText}, Resistance ${C.resistanceSessions(state, [date]) ? "Yes" : "No"}`;
     }).join("\n") : "";
 
     return `Healthtrackker Nutrition Analytics Export
@@ -97,16 +107,16 @@ Goals:
 - Weekly Cardio Goal: ${n(daily.goals.weeklyCardioGoal)}
 
 Daily Summary:
-- Calories Consumed: ${n(daily.summary.caloriesConsumed)}
+- Calories Consumed: ${loggedNumber(daily.summary.nutritionLogged, daily.summary.caloriesConsumed)}
 - Calories Remaining: ${n(daily.summary.caloriesRemaining)}
-- Protein: ${n(daily.summary.protein)}g
-- Carbs: ${n(daily.summary.carbs)}g
-- Fat: ${n(daily.summary.fat)}g
-- Cardio: ${n(daily.summary.cardio)}
+- Protein: ${loggedNumber(daily.summary.nutritionLogged, daily.summary.protein, 0, "g")}
+- Carbs: ${loggedNumber(daily.summary.nutritionLogged, daily.summary.carbs, 0, "g")}
+- Fat: ${loggedNumber(daily.summary.nutritionLogged, daily.summary.fat, 0, "g")}
+- Cardio: ${loggedNumber(daily.summary.cardioLogged, daily.summary.cardio)}
 - Resistance Training: ${daily.summary.resistanceTraining ? "Yes" : "No"}
 - Weight: ${daily.summary.weight ? `${n(daily.summary.weight, 1)} kg` : "Not logged"}
 - Waist: ${daily.summary.waist ? `${n(daily.summary.waist, 1)} cm` : "Not logged"}
-- Macro Distribution: Protein ${pct(daily.macroDistribution.protein)}, Carbs ${pct(daily.macroDistribution.carbs)}, Fat ${pct(daily.macroDistribution.fat)}
+- Macro Distribution: ${daily.summary.nutritionLogged ? `Protein ${pct(daily.macroDistribution.protein)}, Carbs ${pct(daily.macroDistribution.carbs)}, Fat ${pct(daily.macroDistribution.fat)}` : "Not logged"}
 - Daily Adherence: Calories ${pct(daily.adherence.calories)}, Protein ${pct(daily.adherence.protein)}, Carbs ${pct(daily.adherence.carbs)}, Fat ${pct(daily.adherence.fat)}, Cardio ${pct(daily.adherence.cardio)}, Overall ${pct(daily.adherence.overall)}
 - Estimated Deficit If Stops Eating Now: ${n(daily.deficit.estimatedIfStopsNow)}
 - Estimated Deficit If Reaches Target: ${n(daily.deficit.estimatedIfTarget)}
